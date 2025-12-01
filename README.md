@@ -1,15 +1,15 @@
 ## Open Research Interface
 
 Open Research Interface is a **GitHub‑native writing environment** for open research projects.  
-It gives you an Overleaf‑style experience focused on the **main LaTeX document and references**, while keeping all artifacts (papers, datasets, apps, notebooks, models) in a **standard GitHub research structure**.
+It gives you an Overleaf‑style experience focused on the **main LaTeX document and references**, while keeping all artifacts (papers, datasets, apps, notebooks, models) in a **standard GitHub research structure** compatible and integrated with https://github.com/gbrlpzz/research-index which functions as an open back-end. 
 
 - **You read & write here** → clean editor, drafts, citations.
-- **You code in your IDE** (e.g. Cursor).
+- **You code in your IDE**
 - **You browse repos on GitHub**.
 
 The app sits on top of:
 
-- `research-index`: shared catalogue + shared `references.bib`.
+- `research-index`: shared catalogue + shared `references.bib`. See: https://github.com/gbrlpzz/research-index
 - `paper-*`, `dataset-*`, `app-*`, `notebook-*`, `model-*` repos: one repo per artifact, each with a `main.tex` entrypoint (and optional drafts).
 
 ---
