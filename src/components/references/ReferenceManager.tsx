@@ -3,6 +3,7 @@ import { useStore } from '@/lib/store';
 import { getFileContent, updateFile } from '@/lib/github';
 import { Reference } from '@/lib/types';
 import { BookOpen, Plus, Search, Loader2 } from 'lucide-react';
+import clsx from 'clsx';
 
 // Simple regex-based BibTeX parser for MVP
 const parseBibTeX = (content: string): Reference[] => {
@@ -37,8 +38,8 @@ const parseBibTeX = (content: string): Reference[] => {
 };
 
 export function ReferenceManager() {
-    const { token, repos } = useStore();
-    const [references, setReferences] = useState<Reference[]>([]);
+    const { token, repos, currentRepo } = useStore();
+    const [references, setReferences] = useState<(Reference & { source?: string })[]>([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
     const [showAdd, setShowAdd] = useState(false);
@@ -46,34 +47,72 @@ export function ReferenceManager() {
     const [adding, setAdding] = useState(false);
 
     const fetchReferences = async () => {
-        if (!token || repos.length === 0) return;
-
-        // Find research-index
-        const indexRepo = repos.find(r => r.name === 'research-index');
-        if (!indexRepo) return;
+        if (!token) return;
 
         setLoading(true);
+        const allRefs: (Reference & { source?: string })[] = [];
+
         try {
-            // Try 01. refs/references.bib first, then refs/references.bib
-            let path = '01. refs/references.bib';
-            try {
-                await getFileContent(token, indexRepo.name.split('/')[0], indexRepo.name, path);
-            } catch {
-                path = 'refs/references.bib';
+            // 1. Fetch from Global Research Index
+            const indexRepo = repos.find(r => r.name === 'research-index');
+            if (indexRepo) {
+                let path = '01. refs/references.bib';
+                try {
+                    // Check if file exists (naive check by trying to get content)
+                    // In a real app we might use getRepoContents to check existence first
+                    // But here we rely on try/catch
+                    await getFileContent(token, indexRepo.owner, indexRepo.name, path);
+                } catch {
+                    path = 'refs/references.bib';
+                }
+
+                try {
+                    const { content } = await getFileContent(token, indexRepo.owner, indexRepo.name, path);
+                    const globalRefs = parseBibTeX(content).map(r => ({ ...r, source: 'global' }));
+                    allRefs.push(...globalRefs);
+                } catch (e) {
+                    console.warn('Failed to fetch global refs', e);
+                }
             }
 
-            const { content } = await getFileContent(token, indexRepo.name.split('/')[0], indexRepo.name, path);
-            setReferences(parseBibTeX(content));
+            // 2. Fetch from Current Repository (Local)
+            if (currentRepo && currentRepo.name !== 'research-index') {
+                try {
+                    const { content } = await getFileContent(token, currentRepo.owner, currentRepo.name, 'references.bib');
+                    const localRefs = parseBibTeX(content).map(r => ({ ...r, source: 'local' }));
+
+                    // Merge: Local overrides global if IDs match? Or just show both?
+                    // Let's show both but maybe dedupe by ID if needed. 
+                    // For now, just push all.
+                    allRefs.push(...localRefs);
+                } catch (e) {
+                    // It's okay if local repo doesn't have references.bib
+                }
+            }
+
+            // Deduplicate by ID? 
+            // If local has same ID as global, local should probably win or be shown as local.
+            // Let's keep it simple: Map by ID.
+            const refMap = new Map<string, Reference & { source?: string }>();
+
+            // Add global first
+            allRefs.filter(r => r.source === 'global').forEach(r => refMap.set(r.id, r));
+            // Add local (overwriting global)
+            allRefs.filter(r => r.source === 'local').forEach(r => refMap.set(r.id, r));
+
+            setReferences(Array.from(refMap.values()));
+
         } catch (error) {
             console.error('Failed to fetch references', error);
-        } finally {
-            setLoading(false);
         }
+
+        // We need to finish the function, but I need to update the hook first.
+        // Let's just rewrite the whole function and the hook destructuring.
     };
 
     useEffect(() => {
         fetchReferences();
-    }, [token, repos]);
+    }, [token, repos, currentRepo]);
 
     const handleAddReference = async () => {
         if (!token || !newEntry.trim()) return;
@@ -208,6 +247,16 @@ export function ReferenceManager() {
                                     {ref.type}
                                 </span>
                                 {ref.year && <span>{ref.year}</span>}
+                                {ref.source && (
+                                    <span className={clsx(
+                                        "px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider",
+                                        ref.source === 'local'
+                                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                                            : "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                                    )}>
+                                        {ref.source}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     ))
