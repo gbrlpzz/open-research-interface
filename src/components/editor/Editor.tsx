@@ -138,45 +138,64 @@ export function Editor() {
 
                 for (const { from, to } of view.visibleRanges) {
                     const text = doc.sliceString(from, to);
-                    const re = /\\text(bf|it)\{([^}]*)\}/g;
-                    let match: RegExpExecArray | null;
-                    while ((match = re.exec(text)) !== null) {
-                        const full = match[0];
-                        const kind = match[1]; // 'bf' or 'it'
+                    // Bold / italic commands
+                    {
+                        const re = /\\text(bf|it)\{([^}]*)\}/g;
+                        let match: RegExpExecArray | null;
+                        while ((match = re.exec(text)) !== null) {
+                            const full = match[0];
+                            const kind = match[1]; // 'bf' or 'it'
 
-                        const fullStart = from + match.index;
-                        const fullEnd = fullStart + full.length;
+                            const fullStart = from + match.index;
+                            const fullEnd = fullStart + full.length;
 
-                        const openingLen = (`\\text${kind}{`).length;
-                        const openingStart = fullStart;
-                        const openingEnd = fullStart + openingLen;
-                        const innerStart = openingEnd;
-                        const innerEnd = fullEnd - 1; // before closing brace
-                        const closingStart = fullEnd - 1;
-                        const closingEnd = fullEnd;
+                            const openingLen = (`\\text${kind}{`).length;
+                            const openingStart = fullStart;
+                            const openingEnd = fullStart + openingLen;
+                            const innerStart = openingEnd;
+                            const innerEnd = fullEnd - 1; // before closing brace
+                            const closingStart = fullEnd - 1;
+                            const closingEnd = fullEnd;
 
-                        if (openingStart < openingEnd) {
-                            ranges.push(
-                                Decoration.mark({ class: 'cm-hidden-latex-cmd' }).range(
-                                    openingStart,
-                                    openingEnd
-                                )
-                            );
+                            if (openingStart < openingEnd) {
+                                ranges.push(
+                                    Decoration.mark({ class: 'cm-hidden-latex-cmd' }).range(
+                                        openingStart,
+                                        openingEnd
+                                    )
+                                );
+                            }
+                            if (closingStart < closingEnd) {
+                                ranges.push(
+                                    Decoration.mark({ class: 'cm-hidden-latex-cmd' }).range(
+                                        closingStart,
+                                        closingEnd
+                                    )
+                                );
+                            }
+
+                            const styleClass = kind === 'bf' ? 'cm-latex-bold' : 'cm-latex-italic';
+                            if (innerStart < innerEnd) {
+                                ranges.push(
+                                    Decoration.mark({ class: styleClass }).range(innerStart, innerEnd)
+                                );
+                            }
                         }
-                        if (closingStart < closingEnd) {
-                            ranges.push(
-                                Decoration.mark({ class: 'cm-hidden-latex-cmd' }).range(
-                                    closingStart,
-                                    closingEnd
-                                )
-                            );
-                        }
+                    }
 
-                        const styleClass = kind === 'bf' ? 'cm-latex-bold' : 'cm-latex-italic';
-                        if (innerStart < innerEnd) {
-                            ranges.push(
-                                Decoration.mark({ class: styleClass }).range(innerStart, innerEnd)
-                            );
+                    // \cite{key} highlighting
+                    {
+                        const citeRe = /\\cite\{([^}]+)\}/g;
+                        let match: RegExpExecArray | null;
+                        while ((match = citeRe.exec(text)) !== null) {
+                            const full = match[0];
+                            const fullStart = from + match.index;
+                            const fullEnd = fullStart + full.length;
+                            if (fullStart < fullEnd) {
+                                ranges.push(
+                                    Decoration.mark({ class: 'cm-latex-cite' }).range(fullStart, fullEnd)
+                                );
+                            }
                         }
                     }
                 }
@@ -198,6 +217,12 @@ export function Editor() {
         },
         '.cm-latex-italic': {
             fontStyle: 'italic',
+        },
+        '.cm-latex-cite': {
+            backgroundColor: 'rgba(37, 99, 235, 0.08)',
+            borderRadius: '999px',
+            padding: '0 0.25rem',
+            fontSize: '0.85em',
         },
     });
 
