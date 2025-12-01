@@ -38,3 +38,10 @@ export interface Reference {
     url?: string;
     raw: string; // The full BibTeX entry
 }
+
+export interface Draft {
+    id: string; // 'draft-1', 'draft-2'
+    name: string; // 'Draft 1'
+    path: string; // 'drafts/draft-1/main.tex'
+    updated_at: string;
+}

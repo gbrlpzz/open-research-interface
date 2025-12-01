@@ -4,7 +4,7 @@ import { updateFile } from '@/lib/github';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
-import { EditorView, keymap, Decoration, ViewPlugin, ViewUpdate } from '@codemirror/view';
+import { EditorView } from '@codemirror/view';
 import { Save, X, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -32,7 +32,7 @@ export function Editor() {
         !!currentRepo &&
         !!currentFile &&
         currentFile.repo === currentRepo.name &&
-        currentFile.path.endsWith('.tex') &&
+        (currentFile.path === 'main.tex' || currentFile.path.includes('drafts/')) &&
         currentRepo.name.startsWith('paper-');
 
     const handleSave = async () => {
@@ -76,11 +76,7 @@ export function Editor() {
         return (
             <div className="flex-1 flex items-center justify-center bg-white dark:bg-neutral-900 text-neutral-400">
                 <div className="text-center">
-                    <p>
-                        {viewMode === 'paper'
-                            ? 'Opening main document...'
-                            : 'Select a file to edit'}
-                    </p>
+                    <p>Select a file to edit</p>
                 </div>
             </div>
         );
@@ -88,269 +84,80 @@ export function Editor() {
 
     // Determine language extension
     const ext = currentFile.path.split('.').pop()?.toLowerCase();
-
-    const latexKeymap = keymap.of([
-        {
-            key: 'Mod-b',
-            preventDefault: true,
-            run: (view) => {
-                const { from, to } = view.state.selection.main;
-                const selected = view.state.sliceDoc(from, to);
-                const wrapped = `\\textbf{${selected || 'text'}}`;
-                view.dispatch({
-                    changes: { from, to, insert: wrapped },
-                    selection: { anchor: from + (selected ? wrapped.length : 8), head: from + (selected ? wrapped.length : 8) },
-                });
-                return true;
-            },
-        },
-        {
-            key: 'Mod-i',
-            preventDefault: true,
-            run: (view) => {
-                const { from, to } = view.state.selection.main;
-                const selected = view.state.sliceDoc(from, to);
-                const wrapped = `\\textit{${selected || 'text'}}`;
-                view.dispatch({
-                    changes: { from, to, insert: wrapped },
-                    selection: { anchor: from + (selected ? wrapped.length : 8), head: from + (selected ? wrapped.length : 8) },
-                });
-                return true;
-            },
-        },
-    ]);
-
-    // Visually hide simple LaTeX markup like \textbf{...} / \textit{...}
-    const latexPrettyPrint = ViewPlugin.fromClass(
-        class {
-            decorations;
-            constructor(view: EditorView) {
-                this.decorations = this.buildDecorations(view);
-            }
-            update(update: ViewUpdate) {
-                if (update.docChanged || update.viewportChanged) {
-                    this.decorations = this.buildDecorations(update.view);
-                }
-            }
-            buildDecorations(view: EditorView) {
-                const ranges: any[] = [];
-                const doc = view.state.doc;
-
-                for (const { from, to } of view.visibleRanges) {
-                    const text = doc.sliceString(from, to);
-                    // Bold / italic commands
-                    {
-                        const re = /\\text(bf|it)\{([^}]*)\}/g;
-                        let match: RegExpExecArray | null;
-                        while ((match = re.exec(text)) !== null) {
-                            const full = match[0];
-                            const kind = match[1]; // 'bf' or 'it'
-
-                            const fullStart = from + match.index;
-                            const fullEnd = fullStart + full.length;
-
-                            const openingLen = (`\\text${kind}{`).length;
-                            const openingStart = fullStart;
-                            const openingEnd = fullStart + openingLen;
-                            const innerStart = openingEnd;
-                            const innerEnd = fullEnd - 1; // before closing brace
-                            const closingStart = fullEnd - 1;
-                            const closingEnd = fullEnd;
-
-                            if (openingStart < openingEnd) {
-                                ranges.push(
-                                    Decoration.mark({ class: 'cm-hidden-latex-cmd' }).range(
-                                        openingStart,
-                                        openingEnd
-                                    )
-                                );
-                            }
-                            if (closingStart < closingEnd) {
-                                ranges.push(
-                                    Decoration.mark({ class: 'cm-hidden-latex-cmd' }).range(
-                                        closingStart,
-                                        closingEnd
-                                    )
-                                );
-                            }
-
-                            const styleClass = kind === 'bf' ? 'cm-latex-bold' : 'cm-latex-italic';
-                            if (innerStart < innerEnd) {
-                                ranges.push(
-                                    Decoration.mark({ class: styleClass }).range(innerStart, innerEnd)
-                                );
-                            }
-                        }
-                    }
-
-                    // \cite{key} highlighting
-                    {
-                        const citeRe = /\\cite\{([^}]+)\}/g;
-                        let match: RegExpExecArray | null;
-                        while ((match = citeRe.exec(text)) !== null) {
-                            const full = match[0];
-                            const fullStart = from + match.index;
-                            const fullEnd = fullStart + full.length;
-                            if (fullStart < fullEnd) {
-                                ranges.push(
-                                    Decoration.mark({ class: 'cm-latex-cite' }).range(fullStart, fullEnd)
-                                );
-                            }
-                        }
-                    }
-                }
-
-                return Decoration.set(ranges, true);
-            }
-        },
-        {
-            decorations: (v) => v.decorations,
-        }
-    );
-
-    const latexPrettyPrintTheme = EditorView.baseTheme({
-        '.cm-hidden-latex-cmd': {
-            display: 'none',
-        },
-        '.cm-latex-bold': {
-            fontWeight: 600,
-        },
-        '.cm-latex-italic': {
-            fontStyle: 'italic',
-        },
-        '.cm-latex-cite': {
-            backgroundColor: 'rgba(37, 99, 235, 0.08)',
-            borderRadius: '999px',
-            padding: '0 0.25rem',
-            fontSize: '0.85em',
-        },
-    });
+    const extensions = [markdown({ base: markdownLanguage })]; // Default to markdown for now
 
     return (
         <div className="flex-1 flex flex-col h-full bg-white dark:bg-neutral-900">
             {/* Tabs */}
-            {!isPaperMainDoc && (
-                <div className="flex overflow-x-auto border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900">
-                    {openFiles.map((file) => (
-                        <div
-                            key={file.path}
-                            className={clsx(
-                                "flex items-center gap-2 px-4 py-2 text-sm border-r border-neutral-200 dark:border-neutral-700 cursor-pointer min-w-[150px] max-w-[200px]",
-                                activeFile === file.path
-                                    ? "bg-white dark:bg-neutral-900 text-blue-600 dark:text-blue-400 font-medium border-t-2 border-t-blue-600"
-                                    : "bg-neutral-50 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                            )}
-                            onClick={() => setActiveFile(file.path)}
+            <div className="flex overflow-x-auto border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900">
+                {openFiles.map((file) => (
+                    <div
+                        key={file.path}
+                        className={clsx(
+                            "flex items-center gap-2 px-4 py-2 text-sm border-r border-neutral-200 dark:border-neutral-700 cursor-pointer min-w-[150px] max-w-[200px]",
+                            activeFile === file.path
+                                ? "bg-white dark:bg-neutral-900 text-blue-600 dark:text-blue-400 font-medium border-t-2 border-t-blue-600"
+                                : "bg-neutral-50 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                        )}
+                        onClick={() => setActiveFile(file.path)}
+                    >
+                        <span className="truncate flex-1">{file.path.split('/').pop()}</span>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                closeFile(file.path);
+                            }}
+                            className="p-0.5 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded"
                         >
-                            <span className="truncate flex-1">{file.path.split('/').pop()}</span>
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    closeFile(file.path);
-                                }}
-                                className="p-0.5 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded"
-                            >
-                                <X className="w-3 h-3" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
+                            <X className="w-3 h-3" />
+                        </button>
+                    </div>
+                ))}
+            </div>
 
             {/* Toolbar */}
-            <div className="p-3 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between bg-white dark:bg-neutral-900">
-                <div className="flex items-center gap-3 min-w-0">
-                    {isPaperMainDoc ? (
-                        <>
-                            <div className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                                Paper
-                            </div>
-                            <div className="text-sm font-medium text-neutral-800 dark:text-neutral-100 truncate">
-                                {currentRepo?.name.replace(/^paper-/, '') || currentFile.repo}
-                            </div>
-                            <div className="text-xs text-neutral-400 truncate">
-                                {currentFile.path}
-                            </div>
-                        </>
-                    ) : (
-                        <div className="text-sm text-neutral-500 truncate px-2">
-                            {currentFile.repo} / {currentFile.path}
-                        </div>
-                    )}
+            <div className="p-2 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between bg-white dark:bg-neutral-900">
+                <div className="text-sm text-neutral-500 truncate px-2">
+                    {currentFile.repo} / {currentFile.path}
                 </div>
-
-                <div className="flex items-center gap-4">
-                    {isPaperMainDoc && (
-                        <div className="flex items-center bg-neutral-100 dark:bg-neutral-800 rounded-full p-0.5 text-xs">
+                <div className="flex items-center gap-2">
+                    {showCommitInput ? (
+                        <div className="flex items-center gap-2 animate-in slide-in-from-right-5 fade-in duration-200">
+                            <input
+                                type="text"
+                                value={commitMessage}
+                                onChange={(e) => setCommitMessage(e.target.value)}
+                                placeholder="Commit message..."
+                                className="px-2 py-1 text-sm border border-neutral-300 dark:border-neutral-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-neutral-50 dark:bg-neutral-800"
+                                autoFocus
+                                onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                            />
                             <button
-                                className={clsx(
-                                    "px-3 py-1 rounded-full transition-colors",
-                                    editorMode === 'editor'
-                                        ? "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-sm"
-                                        : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
-                                )}
-                                onClick={() => setEditorMode('editor')}
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
                             >
-                                Editor view
+                                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Commit'}
                             </button>
                             <button
-                                className={clsx(
-                                    "px-3 py-1 rounded-full transition-colors",
-                                    editorMode === 'code'
-                                        ? "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-sm"
-                                        : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
-                                )}
-                                onClick={() => setEditorMode('code')}
+                                onClick={() => setShowCommitInput(false)}
+                                className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
                             >
-                                Code view
+                                <X className="w-4 h-4" />
                             </button>
                         </div>
+                    ) : (
+                        <button
+                            onClick={() => {
+                                setCommitMessage(`Update ${currentFile.path.split('/').pop()} via OpenResearchApp`);
+                                setShowCommitInput(true);
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-sm rounded hover:opacity-90 transition-opacity"
+                        >
+                            <Save className="w-3 h-3" />
+                            <span>Save to GitHub</span>
+                        </button>
                     )}
-
-                    <div className="flex items-center gap-2">
-                        {showCommitInput ? (
-                            <div className="flex items-center gap-2 animate-in slide-in-from-right-5 fade-in duration-200">
-                                <input
-                                    type="text"
-                                    value={commitMessage}
-                                    onChange={(e) => setCommitMessage(e.target.value)}
-                                    placeholder="Commit message..."
-                                    className="px-2 py-1 text-xs sm:text-sm border border-neutral-300 dark:border-neutral-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-neutral-50 dark:bg-neutral-800 max-w-[220px] sm:max-w-xs"
-                                    autoFocus
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-                                />
-                                <button
-                                    onClick={handleSave}
-                                    disabled={saving}
-                                    className="px-3 py-1 bg-green-600 text-white text-xs sm:text-sm rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
-                                >
-                                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Commit'}
-                                </button>
-                                <button
-                                    onClick={() => setShowCommitInput(false)}
-                                    className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={() => {
-                                    setCommitMessage(`Update ${currentFile.path.split('/').pop()} via OpenResearchApp`);
-                                    setShowCommitInput(true);
-                                }}
-                                className={clsx(
-                                    "flex items-center gap-2 px-3 py-1.5 text-xs sm:text-sm rounded hover:opacity-90 transition-opacity",
-                                    isPaperMainDoc
-                                        ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
-                                        : "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
-                                )}
-                            >
-                                <Save className="w-3 h-3" />
-                                <span>Save to GitHub</span>
-                            </button>
-                        )}
-                    </div>
                 </div>
             </div>
 
@@ -361,22 +168,50 @@ export function Editor() {
                     height="100%"
                     extensions={[
                         markdown({ base: markdownLanguage }),
-                        EditorView.lineWrapping,
+                        EditorView.lineWrapping, // Enable line wrapping for prose
                         EditorView.theme(
                             isPaperMainDoc && editorMode === 'editor'
                                 ? {
-                                    "&": { fontSize: "16px", fontFamily: "var(--font-inter), sans-serif" },
-                                    ".cm-content": { maxWidth: "800px", margin: "0 auto", padding: "40px 20px" },
-                                    ".cm-line": { lineHeight: "1.6" },
+                                    "&": {
+                                        fontSize: "16px",
+                                        fontFamily: "var(--font-inter), sans-serif",
+                                        backgroundColor: "#f5f5f5", // Gray background for "desk" feel
+                                        height: "100%"
+                                    },
+                                    ".cm-content": {
+                                        maxWidth: "816px", // A4 width approx (8.5in * 96px)
+                                        minHeight: "1056px", // A4 height approx
+                                        margin: "40px auto",
+                                        padding: "60px 80px", // Generous margins
+                                        backgroundColor: "white",
+                                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                                        borderRadius: "2px"
+                                    },
+                                    ".cm-line": { lineHeight: "1.8", color: "#333" },
+                                    ".cm-activeLine": { backgroundColor: "transparent" },
+                                    ".cm-gutters": { display: "none" }
                                 }
                                 : {
                                     "&": { fontSize: "13px", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" },
                                     ".cm-content": { maxWidth: "100%", margin: "0", padding: "16px 12px" },
                                 }
                         ),
-                        isPaperMainDoc && editorMode === 'editor' ? latexPrettyPrint : [],
-                        isPaperMainDoc && editorMode === 'editor' ? latexPrettyPrintTheme : [],
-                        isPaperMainDoc ? latexKeymap : [],
+                        // Simple decorations for "Live Preview" feel
+                        EditorView.baseTheme({
+                            ".cm-header-1": { fontSize: "2em", fontWeight: "bold", marginTop: "1em", marginBottom: "0.5em" },
+                            ".cm-header-2": { fontSize: "1.5em", fontWeight: "bold", marginTop: "1em", marginBottom: "0.5em" },
+                            ".cm-header-3": { fontSize: "1.25em", fontWeight: "bold", marginTop: "1em", marginBottom: "0.5em" },
+                            ".cm-strong": { fontWeight: "bold" },
+                            ".cm-em": { fontStyle: "italic" },
+                            ".cm-citation": {
+                                backgroundColor: "#e0f2fe",
+                                color: "#0284c7",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "0.9em",
+                                fontWeight: "500"
+                            }
+                        })
                     ]}
                     onChange={handleChange}
                     theme={isPaperMainDoc && editorMode === 'editor' ? 'light' : 'light'}

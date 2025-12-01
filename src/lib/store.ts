@@ -11,8 +11,9 @@ interface AppState {
     files: FileNode[]; // Files in current path
     openFiles: { path: string; content: string; sha: string; repo: string; owner: string }[];
     activeFile: string | null; // Path of the active file
-    viewMode: 'paper' | 'repo'; // High-level UI mode
-    currentDraft: string | null; // e.g. 'main' or 'draft-1'
+    viewMode: 'repo' | 'paper';
+    drafts: import('./types').Draft[];
+    currentDraft: string | null; // ID of the current draft
 
     setToken: (token: string | null) => void;
     setUser: (user: User | null) => void;
@@ -20,13 +21,14 @@ interface AppState {
     setCurrentRepo: (repo: Repo | null) => void;
     setCurrentPath: (path: string) => void;
     setFiles: (files: FileNode[]) => void;
-    setCurrentDraft: (draft: string | null) => void;
+    setViewMode: (mode: 'repo' | 'paper') => void;
+    setDrafts: (drafts: import('./types').Draft[]) => void;
+    setCurrentDraft: (draftId: string | null) => void;
 
     openFile: (file: { path: string; content: string; sha: string; repo: string; owner: string }) => void;
     closeFile: (path: string) => void;
     setActiveFile: (path: string) => void;
     updateFileContent: (path: string, content: string) => void;
-    setViewMode: (mode: 'paper' | 'repo') => void;
 }
 
 export const useStore = create<AppState>()(
@@ -41,7 +43,8 @@ export const useStore = create<AppState>()(
             openFiles: [],
             activeFile: null,
             viewMode: 'repo',
-            currentDraft: 'main',
+            drafts: [],
+            currentDraft: null,
 
             setToken: (token) => set({ token }),
             setUser: (user) => set({ user }),
@@ -49,6 +52,9 @@ export const useStore = create<AppState>()(
             setCurrentRepo: (repo) => set({ currentRepo: repo, currentPath: '' }), // Reset path on repo change
             setCurrentPath: (path) => set({ currentPath: path }),
             setFiles: (files) => set({ files }),
+            setViewMode: (mode) => set({ viewMode: mode }),
+            setDrafts: (drafts) => set({ drafts }),
+            setCurrentDraft: (draftId) => set({ currentDraft: draftId }),
 
             openFile: (file) => set((state) => {
                 const exists = state.openFiles.find((f) => f.path === file.path && f.repo === file.repo);
@@ -80,9 +86,6 @@ export const useStore = create<AppState>()(
                     f.path === path ? { ...f, content } : f
                 ),
             })),
-
-            setViewMode: (mode) => set({ viewMode: mode }),
-            setCurrentDraft: (draft) => set({ currentDraft: draft }),
         }),
         {
             name: 'open-research-storage',

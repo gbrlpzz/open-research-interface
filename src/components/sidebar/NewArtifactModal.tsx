@@ -68,36 +68,23 @@ export function NewArtifactModal({ onClose }: NewArtifactModalProps) {
             }
 
             // 4. Update local state
-            // Ideally we fetch the new repo details properly, but for now we can just add a minimal Repo entry.
+            // Ideally we fetch the new repo details properly, but for now we can mock it or re-fetch all
+            // Let's re-fetch all to be safe and simple
+            // Actually, we can just add it to the list
             setRepos([{
                 id: newRepo.id,
                 name: newRepo.name,
                 full_name: newRepo.full_name,
-                owner: newRepo.owner.login,
                 description: newRepo.description,
                 html_url: newRepo.html_url,
                 updated_at: newRepo.updated_at,
+                owner: newRepo.owner.login,
             }, ...repos]);
 
             onClose();
         } catch (err: any) {
             console.error('Failed to create artifact', err);
-            // Friendlier error messages, especially for common GitHub errors
-            const rawMessage = err?.message || '';
-            const nameExists =
-                rawMessage.includes('name already exists') ||
-                (err?.response?.data?.errors || []).some((e: any) =>
-                    String(e?.message || '').includes('name already exists')
-                );
-
-            if (nameExists) {
-                setError(
-                    `A repository named "${repoName}" already exists on your account. ` +
-                    'Please choose a different slug.'
-                );
-            } else {
-                setError(rawMessage || 'Failed to create artifact');
-            }
+            setError(err.message || 'Failed to create artifact');
         } finally {
             setLoading(false);
         }

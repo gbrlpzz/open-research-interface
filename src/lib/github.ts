@@ -22,7 +22,7 @@ export const getRepos = async (token: string): Promise<Repo[]> => {
     const { data } = await octokit.rest.repos.listForAuthenticatedUser({
         sort: 'updated',
         per_page: 100,
-        affiliation: 'owner',
+        affiliation: 'owner,collaborator,organization_member',
     });
 
     return data.map((repo) => ({
@@ -150,4 +150,157 @@ export const createRepo = async (
         auto_init: true, // Initialize with README
     });
     return data;
+};
+
+export const getDrafts = async (
+    token: string,
+    owner: string,
+    repo: string
+): Promise<import('./types').Draft[]> => {
+    const octokit = createClient(token);
+    try {
+        const { data } = await octokit.rest.repos.getContent({
+            owner,
+            repo,
+            path: 'drafts',
+        });
+
+        if (!Array.isArray(data)) return [];
+
+        // Filter for directories that look like 'draft-*'
+        const draftDirs = data.filter(
+            (item) => item.type === 'dir' && item.name.startsWith('draft-')
+        );
+
+        return draftDirs.map((dir) => ({
+            id: dir.name,
+            name: dir.name.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()), // 'draft-1' -> 'Draft 1'
+            path: `${dir.path}/main.tex`,
+            updated_at: new Date().toISOString(), // We could fetch this from meta.json if we want to be precise
+        }));
+    } catch (error) {
+        // If drafts folder doesn't exist, return empty array
+        return [];
+    }
+};
+
+export const createDraft = async (
+    token: string,
+    owner: string,
+    repo: string,
+    baseContent: string,
+    draftName?: string
+) => {
+    // 1. Find next draft number
+    const drafts = await getDrafts(token, owner, repo);
+    let nextNum = 1;
+    if (drafts.length > 0) {
+        const nums = drafts
+            .map(d => parseInt(d.id.replace('draft-', '')))
+            .filter(n => !isNaN(n));
+        if (nums.length > 0) {
+            nextNum = Math.max(...nums) + 1;
+        }
+    }
+
+    const draftId = `draft-${nextNum}`;
+    const draftPath = `drafts/${draftId}/main.tex`;
+    const metaPath = `drafts/${draftId}/meta.json`;
+
+    // 2. Create main.tex
+    await updateFile(
+        token,
+        owner,
+        repo,
+        draftPath,
+        baseContent,
+        `Create ${draftId}`
+    );
+
+    // 3. Create meta.json
+    const meta = {
+        created_at: new Date().toISOString(),
+        name: draftName || `Draft ${nextNum}`,
+        base_sha: 'TODO', // We could pass this if needed
+    };
+
+    await updateFile(
+        token,
+        owner,
+        repo,
+        metaPath,
+        JSON.stringify(meta, null, 2),
+        `Create ${draftId} metadata`
+    );
+
+    return {
+        id: draftId,
+        name: meta.name,
+        path: draftPath,
+        updated_at: meta.created_at
+    };
+};
+
+export const deleteDraft = async (
+    token: string,
+    owner: string,
+    repo: string,
+    draftId: string
+) => {
+    const octokit = createClient(token);
+    const draftPath = `drafts/${draftId}`;
+
+    // Delete main.tex
+    try {
+        const { data: mainData } = await octokit.rest.repos.getContent({
+            owner,
+            repo,
+            path: `${draftPath}/main.tex`,
+        });
+        if (!Array.isArray(mainData)) {
+            await octokit.rest.repos.deleteFile({
+                owner,
+                repo,
+                path: `${draftPath}/main.tex`,
+                message: `Delete ${draftId} main.tex`,
+                sha: mainData.sha,
+            });
+        }
+    } catch (e) { /* Ignore if missing */ }
+
+    // Delete meta.json
+    try {
+        const { data: metaData } = await octokit.rest.repos.getContent({
+            owner,
+            repo,
+            path: `${draftPath}/meta.json`,
+        });
+        if (!Array.isArray(metaData)) {
+            await octokit.rest.repos.deleteFile({
+                owner,
+                repo,
+                path: `${draftPath}/meta.json`,
+                message: `Delete ${draftId} meta.json`,
+                sha: metaData.sha,
+            });
+        }
+    } catch (e) { /* Ignore if missing */ }
+};
+
+export const mergeDraft = async (
+    token: string,
+    owner: string,
+    repo: string,
+    draftContent: string,
+    draftId: string
+) => {
+    // Overwrite main.tex
+    await updateFile(
+        token,
+        owner,
+        repo,
+        'main.tex',
+        draftContent,
+        `Merge ${draftId} into main`
+    );
 };
