@@ -1,18 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { getRepos } from '@/lib/github';
-import { Book, Database, FileText, Box, Terminal, Search, Plus } from 'lucide-react';
-import { Repo } from '@/lib/types';
+import { FileText, Search, Plus } from 'lucide-react';
 import { NewArtifactModal } from './NewArtifactModal';
 import clsx from 'clsx';
 
-const getIconForRepo = (name: string) => {
-    if (name === 'research-index') return <Book className="w-4 h-4 text-purple-500" />;
-    if (name.startsWith('paper-')) return <FileText className="w-4 h-4 text-blue-500" />;
-    if (name.startsWith('dataset-')) return <Database className="w-4 h-4 text-green-500" />;
-    if (name.startsWith('app-')) return <Box className="w-4 h-4 text-orange-500" />;
-    if (name.startsWith('notebook-')) return <Terminal className="w-4 h-4 text-yellow-500" />;
-    return <Book className="w-4 h-4 text-neutral-500" />;
+const getIconForRepo = () => {
+    return <FileText className="w-4 h-4 text-blue-500" />;
 };
 
 export function RepoList() {
@@ -26,7 +20,8 @@ export function RepoList() {
             setLoading(true);
             getRepos(token)
                 .then((data) => {
-                    // Filter for relevant repos (Papers and Index only)
+                    // Filter for relevant repos (Papers and Index only) for state,
+                    // but UI will only show paper repos so this feels like "list of papers".
                     const filtered = data.filter(r =>
                         r.name === 'research-index' ||
                         r.name.startsWith('paper-')
@@ -37,22 +32,29 @@ export function RepoList() {
         }
     }, [token, repos.length, setRepos]);
 
-    const filteredRepos = repos.filter(r =>
+    // Show all artifact repos (paper-, dataset-, app-, notebook-, model-); research-index stays hidden.
+    const artifactRepos = repos.filter(r =>
+        r.name.startsWith('paper-') ||
+        r.name.startsWith('dataset-') ||
+        r.name.startsWith('app-') ||
+        r.name.startsWith('notebook-') ||
+        r.name.startsWith('model-')
+    );
+
+    const filteredArtifacts = artifactRepos.filter(r =>
         r.name.toLowerCase().includes(search.toLowerCase())
     );
 
-    const sortedRepos = [...filteredRepos].sort((a, b) => {
-        if (a.name === 'research-index') return -1;
-        if (b.name === 'research-index') return 1;
-        return b.updated_at.localeCompare(a.updated_at);
-    });
+    const sortedArtifacts = [...filteredArtifacts].sort((a, b) =>
+        b.updated_at.localeCompare(a.updated_at)
+    );
 
     return (
         <div className="flex flex-col h-full">
             <div className="p-4 border-b border-neutral-200 dark:border-neutral-700 space-y-3">
                 <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                        Repositories
+                        Documents
                     </h2>
                     <button
                         onClick={() => setShowNewArtifactModal(true)}
@@ -76,18 +78,14 @@ export function RepoList() {
 
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {loading ? (
-                    <div className="p-4 text-center text-sm text-neutral-500">Loading repos...</div>
+                    <div className="p-4 text-center text-sm text-neutral-500">Loading documents...</div>
                 ) : (
-                    sortedRepos.map((repo) => (
+                    sortedArtifacts.map((repo) => (
                         <button
                             key={repo.id}
                             onClick={() => {
                                 setCurrentRepo(repo);
-                                if (repo.name.startsWith('paper-')) {
-                                    setViewMode('paper');
-                                } else {
-                                    setViewMode('repo');
-                                }
+                                setViewMode('paper');
                             }}
                             className={clsx(
                                 "w-full flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors",
@@ -95,7 +93,7 @@ export function RepoList() {
                                 "text-neutral-700 dark:text-neutral-300"
                             )}
                         >
-                            {getIconForRepo(repo.name)}
+                            {getIconForRepo()}
                             <span className="truncate">{repo.name}</span>
                         </button>
                     ))

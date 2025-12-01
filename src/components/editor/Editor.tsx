@@ -4,7 +4,7 @@ import { updateFile } from '@/lib/github';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
-import { EditorView } from '@codemirror/view';
+import { EditorView, keymap, Decoration, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import { Save, X, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -88,7 +88,118 @@ export function Editor() {
 
     // Determine language extension
     const ext = currentFile.path.split('.').pop()?.toLowerCase();
-    const extensions = [markdown({ base: markdownLanguage })]; // Default to markdown for now
+
+    const latexKeymap = keymap.of([
+        {
+            key: 'Mod-b',
+            preventDefault: true,
+            run: (view) => {
+                const { from, to } = view.state.selection.main;
+                const selected = view.state.sliceDoc(from, to);
+                const wrapped = `\\textbf{${selected || 'text'}}`;
+                view.dispatch({
+                    changes: { from, to, insert: wrapped },
+                    selection: { anchor: from + (selected ? wrapped.length : 8), head: from + (selected ? wrapped.length : 8) },
+                });
+                return true;
+            },
+        },
+        {
+            key: 'Mod-i',
+            preventDefault: true,
+            run: (view) => {
+                const { from, to } = view.state.selection.main;
+                const selected = view.state.sliceDoc(from, to);
+                const wrapped = `\\textit{${selected || 'text'}}`;
+                view.dispatch({
+                    changes: { from, to, insert: wrapped },
+                    selection: { anchor: from + (selected ? wrapped.length : 8), head: from + (selected ? wrapped.length : 8) },
+                });
+                return true;
+            },
+        },
+    ]);
+
+    // Visually hide simple LaTeX markup like \textbf{...} / \textit{...}
+    const latexPrettyPrint = ViewPlugin.fromClass(
+        class {
+            decorations;
+            constructor(view: EditorView) {
+                this.decorations = this.buildDecorations(view);
+            }
+            update(update: ViewUpdate) {
+                if (update.docChanged || update.viewportChanged) {
+                    this.decorations = this.buildDecorations(update.view);
+                }
+            }
+            buildDecorations(view: EditorView) {
+                const ranges: any[] = [];
+                const doc = view.state.doc;
+
+                for (const { from, to } of view.visibleRanges) {
+                    const text = doc.sliceString(from, to);
+                    const re = /\\text(bf|it)\{([^}]*)\}/g;
+                    let match: RegExpExecArray | null;
+                    while ((match = re.exec(text)) !== null) {
+                        const full = match[0];
+                        const kind = match[1]; // 'bf' or 'it'
+
+                        const fullStart = from + match.index;
+                        const fullEnd = fullStart + full.length;
+
+                        const openingLen = (`\\text${kind}{`).length;
+                        const openingStart = fullStart;
+                        const openingEnd = fullStart + openingLen;
+                        const innerStart = openingEnd;
+                        const innerEnd = fullEnd - 1; // before closing brace
+                        const closingStart = fullEnd - 1;
+                        const closingEnd = fullEnd;
+
+                        if (openingStart < openingEnd) {
+                            ranges.push(
+                                Decoration.mark({ class: 'cm-hidden-latex-cmd' }).range(
+                                    openingStart,
+                                    openingEnd
+                                )
+                            );
+                        }
+                        if (closingStart < closingEnd) {
+                            ranges.push(
+                                Decoration.mark({ class: 'cm-hidden-latex-cmd' }).range(
+                                    closingStart,
+                                    closingEnd
+                                )
+                            );
+                        }
+
+                        const styleClass = kind === 'bf' ? 'cm-latex-bold' : 'cm-latex-italic';
+                        if (innerStart < innerEnd) {
+                            ranges.push(
+                                Decoration.mark({ class: styleClass }).range(innerStart, innerEnd)
+                            );
+                        }
+                    }
+                }
+
+                return Decoration.set(ranges, true);
+            }
+        },
+        {
+            decorations: (v) => v.decorations,
+        }
+    );
+
+    const latexPrettyPrintTheme = EditorView.baseTheme({
+        '.cm-hidden-latex-cmd': {
+            display: 'none',
+        },
+        '.cm-latex-bold': {
+            fontWeight: 600,
+        },
+        '.cm-latex-italic': {
+            fontStyle: 'italic',
+        },
+    });
 
     return (
         <div className="flex-1 flex flex-col h-full bg-white dark:bg-neutral-900">
@@ -237,7 +348,10 @@ export function Editor() {
                                     "&": { fontSize: "13px", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" },
                                     ".cm-content": { maxWidth: "100%", margin: "0", padding: "16px 12px" },
                                 }
-                        )
+                        ),
+                        isPaperMainDoc && editorMode === 'editor' ? latexPrettyPrint : [],
+                        isPaperMainDoc && editorMode === 'editor' ? latexPrettyPrintTheme : [],
+                        isPaperMainDoc ? latexKeymap : [],
                     ]}
                     onChange={handleChange}
                     theme={isPaperMainDoc && editorMode === 'editor' ? 'light' : 'light'}
