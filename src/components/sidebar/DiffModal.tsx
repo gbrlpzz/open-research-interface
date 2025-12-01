@@ -11,16 +11,17 @@ interface DiffModalProps {
     modifiedContent: string;
     draftName: string;
     onClose: () => void;
-    onConfirm: () => Promise<void>;
+    onConfirm: (shouldBackup: boolean) => Promise<void>;
 }
 
 export function DiffModal({ originalContent, modifiedContent, draftName, onClose, onConfirm }: DiffModalProps) {
     const [merging, setMerging] = useState(false);
+    const [backup, setBackup] = useState(true);
 
     const handleConfirm = async () => {
         setMerging(true);
         try {
-            await onConfirm();
+            await onConfirm(backup);
             onClose();
         } catch (error) {
             console.error('Merge failed', error);
@@ -67,21 +68,35 @@ export function DiffModal({ originalContent, modifiedContent, draftName, onClose
                     />
                 </div>
 
-                <div className="p-4 border-t border-neutral-200 dark:border-neutral-800 flex justify-end gap-3">
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-200"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleConfirm}
-                        disabled={merging}
-                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                    >
-                        {merging ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitMerge className="w-4 h-4" />}
-                        Confirm Merge
-                    </button>
+                <div className="p-4 border-t border-neutral-200 dark:border-neutral-800 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            id="backup"
+                            checked={backup}
+                            onChange={(e) => setBackup(e.target.checked)}
+                            className="rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label htmlFor="backup" className="text-sm text-neutral-700 dark:text-neutral-300">
+                            Backup main document before merging
+                        </label>
+                    </div>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-200"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleConfirm}
+                            disabled={merging}
+                            className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {merging ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitMerge className="w-4 h-4" />}
+                            Confirm Merge
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

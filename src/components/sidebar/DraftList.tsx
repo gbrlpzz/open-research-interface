@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
-import { createDraft, deleteDraft, getDrafts, mergeDraft, getFileContent } from '@/lib/github';
-import { Plus, Trash2, GitMerge, FileText, Loader2, MoreVertical } from 'lucide-react';
+import { createDraft, deleteDraft, getDrafts, mergeDraft, getFileContent, renameDraft } from '@/lib/github';
+import { Plus, Trash2, GitMerge, FileText, Loader2, Edit2, ChevronLeft } from 'lucide-react';
 import { DiffModal } from './DiffModal';
 import clsx from 'clsx';
 
 export function DraftList() {
-    const { token, currentRepo, currentDraft, setCurrentDraft, drafts, setDrafts, openFile } = useStore();
+    const { token, currentRepo, currentDraft, setCurrentDraft, drafts, setDrafts, openFile, setCurrentRepo } = useStore();
     const [loading, setLoading] = useState(false);
     const [creating, setCreating] = useState(false);
     const [merging, setMerging] = useState<string | null>(null);
     const [deleting, setDeleting] = useState<string | null>(null);
+    const [renaming, setRenaming] = useState<string | null>(null);
+    const [renameValue, setRenameValue] = useState('');
     const [diffData, setDiffData] = useState<{
         draftId: string;
         draftName: string;
@@ -37,14 +39,24 @@ export function DraftList() {
 
     const handleCreateDraft = async () => {
         if (!token || !currentRepo) return;
+
+        // Inline creation could be better, but for now let's use a simple default name
+        // or we could use the inline rename logic immediately after creation.
+        // Let's stick to a simple default for now to avoid blocking.
+        const name = `Draft ${drafts.length + 1}`;
+
         setCreating(true);
         try {
             // Get current main content to base draft on
             const { content } = await getFileContent(token, currentRepo.owner, currentRepo.name, 'main.tex');
 
-            const newDraft = await createDraft(token, currentRepo.owner, currentRepo.name, content);
+            const newDraft = await createDraft(token, currentRepo.owner, currentRepo.name, content, name);
             setDrafts([...drafts, newDraft]);
             setCurrentDraft(newDraft.id);
+
+            // Auto-start renaming
+            setRenaming(newDraft.id);
+            setRenameValue(newDraft.name);
         } catch (error) {
             console.error('Failed to create draft', error);
             alert('Failed to create draft');
@@ -68,6 +80,29 @@ export function DraftList() {
             console.error('Failed to delete draft', error);
         } finally {
             setDeleting(null);
+        }
+    };
+
+    const startRenaming = (draftId: string, currentName: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setRenaming(draftId);
+        setRenameValue(currentName);
+    };
+
+    const submitRename = async (draftId: string) => {
+        if (!token || !currentRepo || !renameValue || renameValue === drafts.find(d => d.id === draftId)?.name) {
+            setRenaming(null);
+            return;
+        }
+
+        try {
+            await renameDraft(token, currentRepo.owner, currentRepo.name, draftId, renameValue);
+            setDrafts(drafts.map(d => d.id === draftId ? { ...d, name: renameValue } : d));
+        } catch (error) {
+            console.error('Failed to rename draft', error);
+            alert('Failed to rename draft');
+        } finally {
+            setRenaming(null);
         }
     };
 
@@ -95,11 +130,11 @@ export function DraftList() {
         }
     };
 
-    const confirmMerge = async () => {
+    const confirmMerge = async (shouldBackup: boolean) => {
         if (!token || !currentRepo || !diffData) return;
 
         try {
-            await mergeDraft(token, currentRepo.owner, currentRepo.name, diffData.modifiedContent, diffData.draftId);
+            await mergeDraft(token, currentRepo.owner, currentRepo.name, diffData.modifiedContent, diffData.draftId, shouldBackup);
             alert('Merged successfully!');
             setCurrentDraft('main'); // Switch back to main to see changes
         } catch (error) {
@@ -108,6 +143,39 @@ export function DraftList() {
         } finally {
             setMerging(null);
             setDiffData(null);
+        }
+    };
+
+    const handleBack = () => {
+        setCurrentRepo(null);
+    };
+
+    const handleSelectDraft = async (draftId: string) => {
+        if (!token || !currentRepo) return;
+
+        setCurrentDraft(draftId);
+        setLoading(true); // Re-use loading or add a specific one? Let's just use global loading for now or silent.
+        // Actually, let's not block UI with full loading, maybe just openFile logic.
+
+        try {
+            const path = draftId === 'main' ? 'main.tex' : `drafts/${draftId}/main.tex`;
+            const { content, sha } = await getFileContent(token, currentRepo.owner, currentRepo.name, path);
+
+            openFile({
+                path,
+                content,
+                sha,
+                repo: currentRepo.name,
+                owner: currentRepo.owner
+            });
+            // openFile usually sets activeFile, but let's be sure
+            // store.ts says: openFile: (...) => { ... set((state) => ({ ... openFiles: [...], activeFile: file.path })) }
+            // So it should be auto-set.
+        } catch (error) {
+            console.error('Failed to open draft file', error);
+            alert('Failed to open document');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -126,9 +194,18 @@ export function DraftList() {
                 />
             )}
             <div className="p-4 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                    Drafts
-                </h2>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleBack}
+                        className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded text-neutral-500"
+                        title="Back to Repos"
+                    >
+                        <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <h2 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                        Drafts
+                    </h2>
+                </div>
                 <button
                     onClick={handleCreateDraft}
                     disabled={creating}
@@ -142,7 +219,7 @@ export function DraftList() {
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {/* Main Document Item */}
                 <button
-                    onClick={() => setCurrentDraft('main')}
+                    onClick={() => handleSelectDraft('main')}
                     className={clsx(
                         "w-full flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors group",
                         currentDraft === 'main'
@@ -161,7 +238,7 @@ export function DraftList() {
                     drafts.map((draft) => (
                         <div
                             key={draft.id}
-                            onClick={() => setCurrentDraft(draft.id)}
+                            onClick={() => handleSelectDraft(draft.id)}
                             className={clsx(
                                 "relative w-full flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors cursor-pointer group",
                                 currentDraft === draft.id
@@ -171,13 +248,37 @@ export function DraftList() {
                         >
                             <FileText className="w-4 h-4 shrink-0 opacity-50" />
                             <div className="flex-1 min-w-0 text-left">
-                                <div className="truncate font-medium">{draft.name}</div>
-                                <div className="text-[10px] text-neutral-400 truncate">
-                                    {new Date(draft.updated_at).toLocaleDateString()}
-                                </div>
+                                {renaming === draft.id ? (
+                                    <input
+                                        type="text"
+                                        value={renameValue}
+                                        onChange={(e) => setRenameValue(e.target.value)}
+                                        onBlur={() => submitRename(draft.id)}
+                                        onKeyDown={(e) => e.key === 'Enter' && submitRename(draft.id)}
+                                        autoFocus
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-neutral-900 focus:outline-none"
+                                    />
+                                ) : (
+                                    <>
+                                        <div className="truncate font-medium">{draft.name}</div>
+                                        <div className="text-[10px] text-neutral-400 truncate">
+                                            {new Date(draft.updated_at).toLocaleDateString()}
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {/* Always visible actions, but dimmed until hover */}
+                            <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={(e) => startRenaming(draft.id, draft.name, e)}
+                                    disabled={renaming === draft.id}
+                                    className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-400 hover:text-neutral-900 rounded"
+                                    title="Rename Draft"
+                                >
+                                    {renaming === draft.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Edit2 className="w-3 h-3" />}
+                                </button>
                                 <button
                                     onClick={(e) => handleMergeDraft(draft.id, e)}
                                     disabled={merging === draft.id}

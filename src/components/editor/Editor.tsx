@@ -5,7 +5,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { EditorView } from '@codemirror/view';
-import { Save, X, Loader2 } from 'lucide-react';
+import { Save, X, Loader2, Eye, Code } from 'lucide-react';
 import clsx from 'clsx';
 
 export function Editor() {
@@ -117,8 +117,38 @@ export function Editor() {
 
             {/* Toolbar */}
             <div className="p-2 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between bg-white dark:bg-neutral-900">
-                <div className="text-sm text-neutral-500 truncate px-2">
-                    {currentFile.repo} / {currentFile.path}
+                <div className="flex items-center gap-3">
+                    <div className="text-sm text-neutral-500 truncate px-2">
+                        {currentFile.repo} / {currentFile.path}
+                    </div>
+                    {isPaperMainDoc && (
+                        <div className="flex items-center bg-neutral-100 dark:bg-neutral-800 rounded-md p-0.5">
+                            <button
+                                onClick={() => setEditorMode('editor')}
+                                className={clsx(
+                                    "px-2 py-1 text-xs font-medium rounded-sm flex items-center gap-1 transition-colors",
+                                    editorMode === 'editor'
+                                        ? "bg-white dark:bg-neutral-700 text-blue-600 dark:text-blue-400 shadow-sm"
+                                        : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+                                )}
+                            >
+                                <Eye className="w-3 h-3" />
+                                Preview
+                            </button>
+                            <button
+                                onClick={() => setEditorMode('code')}
+                                className={clsx(
+                                    "px-2 py-1 text-xs font-medium rounded-sm flex items-center gap-1 transition-colors",
+                                    editorMode === 'code'
+                                        ? "bg-white dark:bg-neutral-700 text-blue-600 dark:text-blue-400 shadow-sm"
+                                        : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+                                )}
+                            >
+                                <Code className="w-3 h-3" />
+                                Code
+                            </button>
+                        </div>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     {showCommitInput ? (

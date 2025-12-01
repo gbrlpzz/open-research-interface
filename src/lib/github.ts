@@ -172,12 +172,28 @@ export const getDrafts = async (
             (item) => item.type === 'dir' && item.name.startsWith('draft-')
         );
 
-        return draftDirs.map((dir) => ({
-            id: dir.name,
-            name: dir.name.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()), // 'draft-1' -> 'Draft 1'
-            path: `${dir.path}/main.tex`,
-            updated_at: new Date().toISOString(), // We could fetch this from meta.json if we want to be precise
+        const drafts = await Promise.all(draftDirs.map(async (dir) => {
+            try {
+                const { content } = await getFileContent(token, owner, repo, `${dir.path}/meta.json`);
+                const meta = JSON.parse(content);
+                return {
+                    id: dir.name,
+                    name: meta.name || dir.name,
+                    path: `${dir.path}/main.tex`,
+                    updated_at: meta.created_at || new Date().toISOString(),
+                };
+            } catch (e) {
+                // Fallback if meta.json is missing
+                return {
+                    id: dir.name,
+                    name: dir.name.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                    path: `${dir.path}/main.tex`,
+                    updated_at: new Date().toISOString(),
+                };
+            }
         }));
+
+        return drafts;
     } catch (error) {
         // If drafts folder doesn't exist, return empty array
         return [];
@@ -287,13 +303,75 @@ export const deleteDraft = async (
     } catch (e) { /* Ignore if missing */ }
 };
 
+export const renameDraft = async (
+    token: string,
+    owner: string,
+    repo: string,
+    draftId: string,
+    newName: string
+) => {
+    const metaPath = `drafts/${draftId}/meta.json`;
+
+    // Get existing meta
+    let meta: any = {};
+    try {
+        const { content } = await getFileContent(token, owner, repo, metaPath);
+        meta = JSON.parse(content);
+    } catch (e) {
+        // Create new if missing
+        meta = { created_at: new Date().toISOString() };
+    }
+
+    meta.name = newName;
+
+    await updateFile(
+        token,
+        owner,
+        repo,
+        metaPath,
+        JSON.stringify(meta, null, 2),
+        `Rename ${draftId} to "${newName}"`
+    );
+};
+
+export const createBackup = async (
+    token: string,
+    owner: string,
+    repo: string,
+    content: string,
+    suffix: string
+) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = `backups/main-${suffix}-${timestamp}.tex`;
+
+    await updateFile(
+        token,
+        owner,
+        repo,
+        backupPath,
+        content,
+        `Backup main before ${suffix}`
+    );
+};
+
 export const mergeDraft = async (
     token: string,
     owner: string,
     repo: string,
     draftContent: string,
-    draftId: string
+    draftId: string,
+    shouldBackup: boolean = false
 ) => {
+    // Optional: Backup main before merge
+    if (shouldBackup) {
+        try {
+            const { content: currentMain } = await getFileContent(token, owner, repo, 'main.tex');
+            await createBackup(token, owner, repo, currentMain, `merge-${draftId}`);
+        } catch (e) {
+            console.warn('Failed to create backup, proceeding with merge', e);
+        }
+    }
+
     // Overwrite main.tex
     await updateFile(
         token,
