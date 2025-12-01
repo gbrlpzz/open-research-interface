@@ -11,6 +11,7 @@ interface AppState {
     files: FileNode[]; // Files in current path
     openFiles: { path: string; content: string; sha: string; repo: string; owner: string }[];
     activeFile: string | null; // Path of the active file
+    viewMode: 'paper' | 'repo'; // High-level UI mode
 
     setToken: (token: string | null) => void;
     setUser: (user: User | null) => void;
@@ -23,6 +24,7 @@ interface AppState {
     closeFile: (path: string) => void;
     setActiveFile: (path: string) => void;
     updateFileContent: (path: string, content: string) => void;
+    setViewMode: (mode: 'paper' | 'repo') => void;
 }
 
 export const useStore = create<AppState>()(
@@ -36,6 +38,7 @@ export const useStore = create<AppState>()(
             files: [],
             openFiles: [],
             activeFile: null,
+            viewMode: 'repo',
 
             setToken: (token) => set({ token }),
             setUser: (user) => set({ user }),
@@ -74,6 +77,8 @@ export const useStore = create<AppState>()(
                     f.path === path ? { ...f, content } : f
                 ),
             })),
+
+            setViewMode: (mode) => set({ viewMode: mode }),
         }),
         {
             name: 'open-research-storage',

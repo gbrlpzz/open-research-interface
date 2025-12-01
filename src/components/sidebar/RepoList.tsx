@@ -16,7 +16,7 @@ const getIconForRepo = (name: string) => {
 };
 
 export function RepoList() {
-    const { token, repos, setRepos, setCurrentRepo } = useStore();
+    const { token, repos, setRepos, setCurrentRepo, setViewMode } = useStore();
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
     const [showNewArtifactModal, setShowNewArtifactModal] = useState(false);
@@ -81,7 +81,14 @@ export function RepoList() {
                     sortedRepos.map((repo) => (
                         <button
                             key={repo.id}
-                            onClick={() => setCurrentRepo(repo)}
+                            onClick={() => {
+                                setCurrentRepo(repo);
+                                if (repo.name.startsWith('paper-')) {
+                                    setViewMode('paper');
+                                } else {
+                                    setViewMode('repo');
+                                }
+                            }}
                             className={clsx(
                                 "w-full flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors",
                                 "hover:bg-neutral-100 dark:hover:bg-neutral-800",
