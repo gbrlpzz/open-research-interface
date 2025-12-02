@@ -356,11 +356,11 @@ export function ReferenceManager() {
                                 {ref.source && (
                                     <span className={clsx(
                                         "px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider",
-                                        ref.source === 'local'
+                                        (ref.source === 'local' || ref.source === 'both')
                                             ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                                             : "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
                                     )}>
-                                        {ref.source}
+                                        {ref.source === 'both' ? 'LOCAL+GLOBAL' : ref.source}
                                     </span>
                                 )}
                             </div>
