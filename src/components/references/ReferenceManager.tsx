@@ -51,7 +51,8 @@ export function ReferenceManager() {
         if (!token) return;
 
         setLoading(true);
-        const allRefs: (Reference & { source?: string })[] = [];
+        const globalRefsList: Reference[] = [];
+        const localRefsList: Reference[] = [];
 
         try {
             // 1. Fetch from Global Research Index
@@ -72,8 +73,6 @@ export function ReferenceManager() {
                 let path = '01. refs/references.bib';
                 try {
                     // Check if file exists (naive check by trying to get content)
-                    // In a real app we might use getRepoContents to check existence first
-                    // But here we rely on try/catch
                     await getFileContent(token, indexOwner, indexRepoName, path);
                 } catch {
                     path = 'refs/references.bib';
@@ -81,46 +80,108 @@ export function ReferenceManager() {
 
                 try {
                     const { content } = await getFileContent(token, indexOwner, indexRepoName, path);
-                    const globalRefs = parseBibTeX(content).map(r => ({ ...r, source: 'global' }));
-                    allRefs.push(...globalRefs);
+                    const refs = parseBibTeX(content);
+                    globalRefsList.push(...refs);
                 } catch (e) {
                     console.warn('Failed to fetch global refs', e);
                 }
             }
 
-            // 2. Fetch from Current Repository (Local)
+            // 2. Fetch from ALL Paper Repositories (for Global Aggregation)
+            const paperRepos = repos.filter(r => r.name.startsWith('paper-'));
+
+            // Use Promise.allSettled to fetch in parallel without failing everything
+            const paperPromises = paperRepos.map(async (repo) => {
+                try {
+                    const { content } = await getFileContent(token, repo.owner, repo.name, 'references.bib');
+                    return parseBibTeX(content);
+                } catch {
+                    return [];
+                }
+            });
+
+            const paperResults = await Promise.allSettled(paperPromises);
+            paperResults.forEach(result => {
+                if (result.status === 'fulfilled') {
+                    globalRefsList.push(...result.value);
+                }
+            });
+
+            // 3. Fetch from Current Repository (Local)
             if (currentRepo && currentRepo.name !== 'research-index') {
                 try {
                     const { content } = await getFileContent(token, currentRepo.owner, currentRepo.name, 'references.bib');
-                    const localRefs = parseBibTeX(content).map(r => ({ ...r, source: 'local' }));
-
-                    // Merge: Local overrides global if IDs match? Or just show both?
-                    // Let's show both but maybe dedupe by ID if needed. 
-                    // For now, just push all.
-                    allRefs.push(...localRefs);
+                    const refs = parseBibTeX(content);
+                    localRefsList.push(...refs);
                 } catch (e) {
                     // It's okay if local repo doesn't have references.bib
                 }
             }
 
-            // Deduplicate by ID? 
-            // If local has same ID as global, local should probably win or be shown as local.
-            // Let's keep it simple: Map by ID.
-            const refMap = new Map<string, Reference & { source?: string }>();
+            // Deduplicate Global List
+            const globalMap = new Map<string, Reference & { source: string }>();
+            globalRefsList.forEach(r => globalMap.set(r.id, { ...r, source: 'global' }));
 
-            // Add global first
-            allRefs.filter(r => r.source === 'global').forEach(r => refMap.set(r.id, r));
-            // Add local (overwriting global)
-            allRefs.filter(r => r.source === 'local').forEach(r => refMap.set(r.id, r));
+            // Deduplicate Local List
+            const localMap = new Map<string, Reference & { source: string }>();
+            localRefsList.forEach(r => localMap.set(r.id, { ...r, source: 'local' }));
 
-            setReferences(Array.from(refMap.values()));
+            // Combine for state, but keep source distinction
+            // We want to show:
+            // - If activeTab === 'global': Show everything in globalMap
+            // - If activeTab === 'local': Show everything in localMap
+
+            // We can just store them all in one list with 'source' property, 
+            // but since an item can be in BOTH, we need to handle that.
+            // The current UI filters by `ref.source === activeTab`.
+            // So if an item is in both, it needs to appear in both lists.
+
+            // Let's create a combined list where items might appear twice if they are in both?
+            // Or better: The `source` property should probably be 'global' | 'local' | 'both'?
+            // Or just simpler: The `references` state should contain ALL unique references, 
+            // and we filter based on whether they exist in the global set or local set.
+
+            // Let's stick to the current structure: List of references with a `source` tag.
+            // If it's in both, we can mark it as 'local' (priority) but maybe show it in global too?
+            // Actually, the user wants "Global" tab and "Local" tab.
+            // If I have a ref "X" in both:
+            // - Global tab: Show X
+            // - Local tab: Show X
+
+            // So I should probably just store two separate lists in state?
+            // Or just one list and `source` can be 'global' or 'local' or 'both'.
+
+            const combinedRefs: (Reference & { source: string })[] = [];
+
+            // Add all global refs
+            for (const ref of globalMap.values()) {
+                combinedRefs.push(ref);
+            }
+
+            // Add local refs. If ID exists in global, update it to 'both' or just add it?
+            // If we update to 'both', then the filter logic needs to change.
+            // Let's change the filter logic to:
+            // if activeTab === 'local', show if source === 'local' || source === 'both'
+            // if activeTab === 'global', show if source === 'global' || source === 'both'
+
+            for (const ref of localMap.values()) {
+                const existing = globalMap.get(ref.id);
+                if (existing) {
+                    // It's in both. Let's find it in combinedRefs and update source
+                    const index = combinedRefs.findIndex(r => r.id === ref.id);
+                    if (index !== -1) {
+                        combinedRefs[index].source = 'both';
+                    }
+                } else {
+                    combinedRefs.push(ref);
+                }
+            }
+
+            setReferences(combinedRefs);
 
         } catch (error) {
             console.error('Failed to fetch references', error);
         }
-
-        // We need to finish the function, but I need to update the hook first.
-        // Let's just rewrite the whole function and the hook destructuring.
     };
 
     useEffect(() => {
@@ -179,7 +240,9 @@ export function ReferenceManager() {
             (ref.author?.toLowerCase() || '').includes(search.toLowerCase()) ||
             ref.id.toLowerCase().includes(search.toLowerCase());
 
-        const matchesTab = activeTab === 'local' ? ref.source === 'local' : ref.source === 'global';
+        const matchesTab = activeTab === 'local'
+            ? (ref.source === 'local' || ref.source === 'both')
+            : (ref.source === 'global' || ref.source === 'both');
 
         return matchesSearch && matchesTab;
     });
