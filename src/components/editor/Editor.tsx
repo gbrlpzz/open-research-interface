@@ -7,7 +7,6 @@ import { languages } from '@codemirror/language-data';
 import { EditorView } from '@codemirror/view';
 import { Save, X, Loader2, Eye, Code } from 'lucide-react';
 import clsx from 'clsx';
-import { LatexRenderer } from './LatexRenderer';
 
 export function Editor() {
     const {
@@ -194,34 +193,65 @@ export function Editor() {
 
             {/* Editor Area */}
             <div className="flex-1 overflow-hidden relative">
-                {isPaperMainDoc && editorMode === 'editor' ? (
-                    <div className="h-full overflow-y-auto bg-neutral-100 dark:bg-neutral-950">
-                        <div className="max-w-[816px] min-h-[1056px] mx-auto my-10 bg-white dark:bg-neutral-900 shadow-sm rounded-sm">
-                            <LatexRenderer content={currentFile.content} />
-                        </div>
-                    </div>
-                ) : (
-                    <CodeMirror
-                        value={currentFile.content}
-                        height="100%"
-                        extensions={[
-                            markdown({ base: markdownLanguage }),
-                            EditorView.lineWrapping,
-                            EditorView.theme({
-                                "&": { fontSize: "13px", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" },
-                                ".cm-content": { maxWidth: "100%", margin: "0", padding: "16px 12px" },
-                            })
-                        ]}
-                        onChange={handleChange}
-                        theme={'light'}
-                        className="h-full text-base"
-                        basicSetup={{
-                            lineNumbers: true,
-                            foldGutter: true,
-                            highlightActiveLine: true,
-                        }}
-                    />
-                )}
+                <CodeMirror
+                    value={currentFile.content}
+                    height="100%"
+                    extensions={[
+                        markdown({ base: markdownLanguage }),
+                        EditorView.lineWrapping, // Enable line wrapping for prose
+                        EditorView.theme(
+                            isPaperMainDoc && editorMode === 'editor'
+                                ? {
+                                    "&": {
+                                        fontSize: "16px",
+                                        fontFamily: "var(--font-inter), sans-serif",
+                                        backgroundColor: "#f5f5f5", // Gray background for "desk" feel
+                                        height: "100%"
+                                    },
+                                    ".cm-content": {
+                                        maxWidth: "816px", // A4 width approx (8.5in * 96px)
+                                        minHeight: "1056px", // A4 height approx
+                                        margin: "40px auto",
+                                        padding: "60px 80px", // Generous margins
+                                        backgroundColor: "white",
+                                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                                        borderRadius: "2px"
+                                    },
+                                    ".cm-line": { lineHeight: "1.8", color: "#333" },
+                                    ".cm-activeLine": { backgroundColor: "transparent" },
+                                    ".cm-gutters": { display: "none" }
+                                }
+                                : {
+                                    "&": { fontSize: "13px", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" },
+                                    ".cm-content": { maxWidth: "100%", margin: "0", padding: "16px 12px" },
+                                }
+                        ),
+                        // Simple decorations for "Live Preview" feel
+                        EditorView.baseTheme({
+                            ".cm-header-1": { fontSize: "2em", fontWeight: "bold", marginTop: "1em", marginBottom: "0.5em" },
+                            ".cm-header-2": { fontSize: "1.5em", fontWeight: "bold", marginTop: "1em", marginBottom: "0.5em" },
+                            ".cm-header-3": { fontSize: "1.25em", fontWeight: "bold", marginTop: "1em", marginBottom: "0.5em" },
+                            ".cm-strong": { fontWeight: "bold" },
+                            ".cm-em": { fontStyle: "italic" },
+                            ".cm-citation": {
+                                backgroundColor: "#e0f2fe",
+                                color: "#0284c7",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "0.9em",
+                                fontWeight: "500"
+                            }
+                        })
+                    ]}
+                    onChange={handleChange}
+                    theme={isPaperMainDoc && editorMode === 'editor' ? 'light' : 'light'}
+                    className="h-full text-base"
+                    basicSetup={{
+                        lineNumbers: !(isPaperMainDoc && editorMode === 'editor'),
+                        foldGutter: !isPaperMainDoc,
+                        highlightActiveLine: !isPaperMainDoc,
+                    }}
+                />
             </div>
         </div>
     );

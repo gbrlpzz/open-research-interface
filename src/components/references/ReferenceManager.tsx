@@ -45,6 +45,7 @@ export function ReferenceManager() {
     const [showAdd, setShowAdd] = useState(false);
     const [newEntry, setNewEntry] = useState('');
     const [adding, setAdding] = useState(false);
+    const [activeTab, setActiveTab] = useState<'local' | 'global'>('local');
 
     const fetchReferences = async () => {
         if (!token) return;
@@ -161,11 +162,15 @@ export function ReferenceManager() {
         }
     };
 
-    const filteredRefs = references.filter(ref =>
-        (ref.title?.toLowerCase() || '').includes(search.toLowerCase()) ||
-        (ref.author?.toLowerCase() || '').includes(search.toLowerCase()) ||
-        ref.id.toLowerCase().includes(search.toLowerCase())
-    );
+    const filteredRefs = references.filter(ref => {
+        const matchesSearch = (ref.title?.toLowerCase() || '').includes(search.toLowerCase()) ||
+            (ref.author?.toLowerCase() || '').includes(search.toLowerCase()) ||
+            ref.id.toLowerCase().includes(search.toLowerCase());
+
+        const matchesTab = activeTab === 'local' ? ref.source === 'local' : ref.source === 'global';
+
+        return matchesSearch && matchesTab;
+    });
 
     return (
         <div className="w-80 h-full border-l border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 flex flex-col">
@@ -180,6 +185,32 @@ export function ReferenceManager() {
                         title="Add Reference"
                     >
                         <Plus className="w-4 h-4" />
+                    </button>
+                </div>
+
+                {/* Tab Toggle */}
+                <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-md">
+                    <button
+                        onClick={() => setActiveTab('local')}
+                        className={clsx(
+                            "flex-1 py-1 text-xs font-medium rounded-sm transition-colors",
+                            activeTab === 'local'
+                                ? "bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm"
+                                : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+                        )}
+                    >
+                        Local
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('global')}
+                        className={clsx(
+                            "flex-1 py-1 text-xs font-medium rounded-sm transition-colors",
+                            activeTab === 'global'
+                                ? "bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm"
+                                : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+                        )}
+                    >
+                        Global
                     </button>
                 </div>
 
