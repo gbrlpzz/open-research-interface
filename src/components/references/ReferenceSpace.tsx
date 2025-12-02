@@ -64,112 +64,127 @@ export function ReferenceSpace() {
     };
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-white dark:bg-neutral-900 overflow-hidden">
+        <div className="flex-1 flex flex-col h-full bg-white dark:bg-neutral-950 overflow-hidden font-sans">
             {/* Header */}
-            <div className="p-6 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between bg-neutral-50 dark:bg-neutral-900">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
-                        <BookOpen className="w-6 h-6" />
-                    </div>
+            <div className="px-8 py-12 flex flex-col gap-6 border-b border-neutral-100 dark:border-neutral-900">
+                <div className="flex items-end justify-between">
                     <div>
-                        <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Reference Space</h1>
-                        <p className="text-sm text-neutral-500 dark:text-neutral-400">Manage your global research bibliography</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="relative w-64">
-                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400" />
-                        <input
-                            type="text"
-                            placeholder="Search references..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                        />
+                        <h1 className="text-4xl font-bold tracking-tight text-neutral-900 dark:text-neutral-50 swiss-type">
+                            References
+                        </h1>
+                        <p className="mt-2 text-neutral-500 dark:text-neutral-400 text-sm uppercase tracking-widest">
+                            Global Bibliography
+                        </p>
                     </div>
                     <button
                         onClick={() => setShowAdd(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                        className="px-6 py-3 bg-black text-white dark:bg-white dark:text-black text-sm font-medium hover:opacity-80 transition-opacity"
                     >
-                        <Plus className="w-4 h-4" />
                         Add Reference
                     </button>
+                </div>
+
+                <div className="relative max-w-xl">
+                    <Search className="absolute left-0 top-3 w-5 h-5 text-neutral-400" />
+                    <input
+                        type="text"
+                        placeholder="Search by title, author, or ID..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full pl-8 py-2 bg-transparent border-b border-neutral-200 dark:border-neutral-800 text-lg focus:outline-none focus:border-black dark:focus:border-white transition-colors placeholder:text-neutral-300 dark:placeholder:text-neutral-700"
+                    />
                 </div>
             </div>
 
             {/* Add Modal/Form Overlay */}
             {showAdd && (
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow-xl w-full max-w-md p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                        <h2 className="text-lg font-semibold">Add New Reference</h2>
-                        <div className="space-y-3">
-                            <select
-                                value={formType}
-                                onChange={(e) => setFormType(e.target.value)}
-                                className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
-                            >
-                                <option value="article">Article</option>
-                                <option value="book">Book</option>
-                                <option value="inproceedings">Conference</option>
-                                <option value="misc">Misc</option>
-                            </select>
-                            <input
-                                type="text"
-                                placeholder="ID (optional, auto-generated)"
-                                value={formId}
-                                onChange={(e) => setFormId(e.target.value)}
-                                className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
-                            />
-                            <input
-                                type="text"
-                                placeholder="Title"
-                                value={formTitle}
-                                onChange={(e) => setFormTitle(e.target.value)}
-                                className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
-                            />
-                            <input
-                                type="text"
-                                placeholder="Author"
-                                value={formAuthor}
-                                onChange={(e) => setFormAuthor(e.target.value)}
-                                className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
-                            />
-                            <input
-                                type="text"
-                                placeholder="Year"
-                                value={formYear}
-                                onChange={(e) => setFormYear(e.target.value)}
-                                className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
-                            />
-                            <input
-                                type="text"
-                                placeholder="URL (optional)"
-                                value={formUrl}
-                                onChange={(e) => setFormUrl(e.target.value)}
-                                className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
-                            />
-                            <input
-                                type="text"
-                                placeholder="DOI (optional)"
-                                value={formDoi}
-                                onChange={(e) => setFormDoi(e.target.value)}
-                                className="w-full p-2 border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
-                            />
+                <div className="absolute inset-0 bg-white/90 dark:bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-neutral-900 w-full max-w-2xl p-12 border border-neutral-200 dark:border-neutral-800 shadow-2xl space-y-8 animate-in fade-in zoom-in-95 duration-200">
+                        <h2 className="text-2xl font-bold tracking-tight">New Reference</h2>
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="col-span-2">
+                                <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">Type</label>
+                                <select
+                                    value={formType}
+                                    onChange={(e) => setFormType(e.target.value)}
+                                    className="w-full p-3 bg-neutral-50 dark:bg-neutral-800 border-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                                >
+                                    <option value="article">Article</option>
+                                    <option value="book">Book</option>
+                                    <option value="inproceedings">Conference</option>
+                                    <option value="misc">Misc</option>
+                                </select>
+                            </div>
+                            <div className="col-span-2">
+                                <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">Title</label>
+                                <input
+                                    type="text"
+                                    value={formTitle}
+                                    onChange={(e) => setFormTitle(e.target.value)}
+                                    className="w-full p-3 bg-neutral-50 dark:bg-neutral-800 border-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                                />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">Author</label>
+                                <input
+                                    type="text"
+                                    value={formAuthor}
+                                    onChange={(e) => setFormAuthor(e.target.value)}
+                                    className="w-full p-3 bg-neutral-50 dark:bg-neutral-800 border-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                                />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">Year</label>
+                                <input
+                                    type="text"
+                                    value={formYear}
+                                    onChange={(e) => setFormYear(e.target.value)}
+                                    className="w-full p-3 bg-neutral-50 dark:bg-neutral-800 border-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                                />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">ID (Optional)</label>
+                                <input
+                                    type="text"
+                                    value={formId}
+                                    onChange={(e) => setFormId(e.target.value)}
+                                    className="w-full p-3 bg-neutral-50 dark:bg-neutral-800 border-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                                />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">URL / DOI</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="URL"
+                                        value={formUrl}
+                                        onChange={(e) => setFormUrl(e.target.value)}
+                                        className="w-1/2 p-3 bg-neutral-50 dark:bg-neutral-800 border-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="DOI"
+                                        value={formDoi}
+                                        onChange={(e) => setFormDoi(e.target.value)}
+                                        className="w-1/2 p-3 bg-neutral-50 dark:bg-neutral-800 border-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                                    />
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex justify-end gap-3 pt-2">
+                        <div className="flex justify-end gap-4 pt-4">
                             <button
                                 onClick={() => setShowAdd(false)}
-                                className="px-4 py-2 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded"
+                                className="px-6 py-3 text-neutral-500 hover:text-black dark:hover:text-white uppercase tracking-widest text-xs font-bold"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleAddReference}
                                 disabled={adding}
-                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                                className="px-6 py-3 bg-black text-white dark:bg-white dark:text-black text-sm font-medium hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
                             >
                                 {adding && <Loader2 className="w-4 h-4 animate-spin" />}
-                                Add Reference
+                                Save Reference
                             </button>
                         </div>
                     </div>
@@ -177,66 +192,65 @@ export function ReferenceSpace() {
             )}
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-8">
                 {loading ? (
-                    <div className="flex items-center justify-center h-full text-neutral-500 gap-2">
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Loading references...
+                    <div className="flex items-center justify-center h-full text-neutral-400 gap-2 uppercase tracking-widest text-xs">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Loading
                     </div>
                 ) : error ? (
-                    <div className="p-4 bg-red-50 text-red-600 rounded-md border border-red-200">
+                    <div className="p-4 bg-red-50 text-red-600 border-l-2 border-red-500">
                         {error}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                         {filteredRefs.map((ref) => (
                             <div
                                 key={ref.id}
-                                className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 hover:shadow-md transition-shadow group"
+                                className="group flex flex-col h-full hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors p-4 -m-4 rounded-lg"
                             >
-                                <div className="flex items-start justify-between mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-neutral-100 dark:bg-neutral-700 text-xs font-medium rounded text-neutral-600 dark:text-neutral-300 uppercase">
-                                            {ref.type}
-                                        </span>
-                                        <span className="text-xs font-mono text-neutral-400">
-                                            {ref.id}
-                                        </span>
-                                    </div>
-                                    <div className="flex gap-1">
+                                <div className="flex items-baseline justify-between mb-3 border-b border-neutral-100 dark:border-neutral-800 pb-2">
+                                    <span className="text-xs font-bold uppercase tracking-widest text-neutral-400 group-hover:text-black dark:group-hover:text-white transition-colors">
+                                        {ref.type}
+                                    </span>
+                                    <div className="flex gap-2">
                                         {(ref.url || ref.doi) && (
                                             <a
                                                 href={ref.url || `https://doi.org/${ref.doi}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="p-1 text-neutral-400 hover:text-blue-600 transition-colors"
-                                                title="Open Link"
+                                                className="text-neutral-400 hover:text-blue-600 transition-colors"
                                             >
-                                                <ExternalLink className="w-4 h-4" />
+                                                <ExternalLink className="w-3 h-3" />
                                             </a>
                                         )}
+                                        <span className="text-xs font-mono text-neutral-300 group-hover:text-neutral-500">
+                                            {ref.id}
+                                        </span>
                                     </div>
                                 </div>
 
-                                <h3 className="font-medium text-neutral-900 dark:text-neutral-100 mb-1 line-clamp-2">
+                                <h3 className="text-lg font-medium leading-tight text-neutral-900 dark:text-neutral-100 mb-2 group-hover:text-black dark:group-hover:text-white">
                                     {ref.title || 'Untitled'}
                                 </h3>
-                                <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3 line-clamp-1">
-                                    {ref.author} {ref.year && `(${ref.year})`}
-                                </p>
 
-                                <div className="pt-3 border-t border-neutral-100 dark:border-neutral-700/50 flex items-center justify-between">
-                                    <div className="flex flex-wrap gap-1">
-                                        {ref.usedIn.length > 0 ? (
-                                            ref.usedIn.map(repo => (
-                                                <span key={repo} className="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[10px] rounded border border-blue-100 dark:border-blue-800">
+                                <div className="mt-auto pt-4">
+                                    <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-1">
+                                        {ref.author}
+                                    </p>
+                                    <p className="text-sm text-neutral-400 dark:text-neutral-500">
+                                        {ref.year}
+                                    </p>
+
+                                    {ref.usedIn.length > 0 && (
+                                        <div className="mt-3 flex flex-wrap gap-1">
+                                            {ref.usedIn.map(repo => (
+                                                <span key={repo} className="text-[10px] uppercase tracking-wider text-neutral-400 border border-neutral-200 dark:border-neutral-800 px-1.5 py-0.5 rounded-full">
                                                     {repo}
                                                 </span>
-                                            ))
-                                        ) : (
-                                            <span className="text-[10px] text-neutral-400 italic">Not used yet</span>
-                                        )}
-                                    </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}
