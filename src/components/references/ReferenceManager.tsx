@@ -38,7 +38,7 @@ const parseBibTeX = (content: string): Reference[] => {
 };
 
 export function ReferenceManager() {
-    const { token, repos, currentRepo } = useStore();
+    const { token, repos, currentRepo, user } = useStore();
     const [references, setReferences] = useState<(Reference & { source?: string })[]>([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
@@ -55,20 +55,32 @@ export function ReferenceManager() {
 
         try {
             // 1. Fetch from Global Research Index
+            let indexOwner = '';
+            let indexRepoName = 'research-index';
+
+            // Try to find it in the loaded repos first
             const indexRepo = repos.find(r => r.name === 'research-index');
             if (indexRepo) {
+                indexOwner = indexRepo.owner;
+                indexRepoName = indexRepo.name;
+            } else if (user?.login) {
+                // Fallback: Assume it exists under the user's login
+                indexOwner = user.login;
+            }
+
+            if (indexOwner) {
                 let path = '01. refs/references.bib';
                 try {
                     // Check if file exists (naive check by trying to get content)
                     // In a real app we might use getRepoContents to check existence first
                     // But here we rely on try/catch
-                    await getFileContent(token, indexRepo.owner, indexRepo.name, path);
+                    await getFileContent(token, indexOwner, indexRepoName, path);
                 } catch {
                     path = 'refs/references.bib';
                 }
 
                 try {
-                    const { content } = await getFileContent(token, indexRepo.owner, indexRepo.name, path);
+                    const { content } = await getFileContent(token, indexOwner, indexRepoName, path);
                     const globalRefs = parseBibTeX(content).map(r => ({ ...r, source: 'global' }));
                     allRefs.push(...globalRefs);
                 } catch (e) {
@@ -113,7 +125,7 @@ export function ReferenceManager() {
 
     useEffect(() => {
         fetchReferences();
-    }, [token, repos, currentRepo]);
+    }, [token, repos, currentRepo, user]);
 
     const handleAddReference = async () => {
         if (!token || !newEntry.trim()) return;
