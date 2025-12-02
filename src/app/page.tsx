@@ -3,6 +3,7 @@
 import { useStore } from '@/lib/store';
 import { Login } from '@/components/auth/Login';
 import { Sidebar } from '@/components/sidebar/Sidebar';
+import { ActivityBar } from '@/components/layout/ActivityBar';
 import { Editor } from '@/components/editor/Editor';
 import { ReferenceManager } from '@/components/references/ReferenceManager';
 import { ReferenceSpace } from '@/components/references/ReferenceSpace';
@@ -23,16 +24,19 @@ export default function Home() {
   }
 
   return (
-    <main className="flex h-screen w-screen overflow-hidden bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100">
+    <main className="flex h-screen w-screen overflow-hidden bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 font-sans">
+      <ActivityBar />
       <Sidebar />
-      {viewMode === 'references' ? (
-        <ReferenceSpace />
-      ) : (
-        <>
-          <Editor />
-          <ReferenceManager />
-        </>
-      )}
+      <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-neutral-950">
+        {viewMode === 'references' ? (
+          <ReferenceSpace />
+        ) : (
+          <div className="flex-1 flex min-w-0">
+            <Editor />
+            <ReferenceManager />
+          </div>
+        )}
+      </div>
     </main>
   );
 }
