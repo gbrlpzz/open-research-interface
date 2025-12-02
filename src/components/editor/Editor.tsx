@@ -25,6 +25,21 @@ export function Editor() {
     const [commitMessage, setCommitMessage] = useState('');
     const [showCommitInput, setShowCommitInput] = useState(false);
     const [editorMode, setEditorMode] = useState<'live' | 'preview' | 'code'>('live');
+    const [editorView, setEditorView] = useState<EditorView | null>(null);
+    const { citationToInsert, setCitationToInsert } = useStore();
+
+    useEffect(() => {
+        if (citationToInsert && editorView) {
+            const transaction = editorView.state.update({
+                changes: { from: editorView.state.selection.main.head, insert: citationToInsert },
+                selection: { anchor: editorView.state.selection.main.head + citationToInsert.length }
+            });
+            editorView.dispatch(transaction);
+            setCitationToInsert(null);
+            // Focus back to editor
+            editorView.focus();
+        }
+    }, [citationToInsert, editorView, setCitationToInsert]);
 
     const currentFile = openFiles.find(f => f.path === activeFile);
 
@@ -210,6 +225,14 @@ export function Editor() {
                     <CodeMirror
                         value={currentFile.content}
                         height="100%"
+                        onCreateEditor={(view) => {
+                            // Store view in a ref or just use a local variable if we only need it for one-off
+                            // But we need it in useEffect. 
+                            // Let's attach it to a ref defined outside.
+                            // Actually, we can't easily pass a ref to useEffect from here without state.
+                            // Let's use a state to hold the view.
+                            setEditorView(view);
+                        }}
                         extensions={[
                             markdown({ base: markdownLanguage }),
                             EditorView.lineWrapping,

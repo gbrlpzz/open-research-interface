@@ -1,243 +1,58 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useStore } from '@/lib/store';
-import { getFileContent, updateFile } from '@/lib/github';
-import { Reference } from '@/lib/types';
-import { BookOpen, Plus, Search, Loader2 } from 'lucide-react';
+import { useReferences } from '@/hooks/useReferences';
+import { Plus, Search, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
-// Simple regex-based BibTeX parser for MVP
-const parseBibTeX = (content: string): Reference[] => {
-    const references: Reference[] = [];
-    const entries = content.split('@');
-
-    for (const entry of entries) {
-        if (!entry.trim()) continue;
-
-        const typeMatch = entry.match(/^(\w+)\s*{/);
-        const idMatch = entry.match(/{\s*([^,]+),/);
-
-        if (typeMatch && idMatch) {
-            const type = typeMatch[1];
-            const id = idMatch[1];
-            const titleMatch = entry.match(/title\s*=\s*{([^}]+)}/i);
-            const authorMatch = entry.match(/author\s*=\s*{([^}]+)}/i);
-            const yearMatch = entry.match(/year\s*=\s*{([^}]+)}/i);
-
-            references.push({
-                id,
-                type,
-                title: titleMatch ? titleMatch[1] : undefined,
-                author: authorMatch ? authorMatch[1] : undefined,
-                year: yearMatch ? yearMatch[1] : undefined,
-                raw: '@' + entry
-            });
-        }
-    }
-
-    return references;
-};
-
 export function ReferenceManager() {
-    const { token, repos, currentRepo, user } = useStore();
-    const [references, setReferences] = useState<(Reference & { source?: string })[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { setCitationToInsert } = useStore();
+    const { references, loading, error, addReference } = useReferences();
+
     const [search, setSearch] = useState('');
     const [showAdd, setShowAdd] = useState(false);
-    const [newEntry, setNewEntry] = useState('');
     const [adding, setAdding] = useState(false);
     const [activeTab, setActiveTab] = useState<'local' | 'global'>('local');
 
-    const fetchReferences = async () => {
-        if (!token) return;
-
-        setLoading(true);
-        setError(null);
-        const globalRefsList: Reference[] = [];
-        const localRefsList: Reference[] = [];
-
-        try {
-            // 1. Fetch from Global Research Index
-            let indexOwner = '';
-            let indexRepoName = 'research-index';
-
-            // Try to find it in the loaded repos first
-            const indexRepo = repos.find(r => r.name === 'research-index');
-            if (indexRepo) {
-                indexOwner = indexRepo.owner;
-                indexRepoName = indexRepo.name;
-            } else if (user?.login) {
-                // Fallback: Assume it exists under the user's login
-                indexOwner = user.login;
-            }
-
-            if (indexOwner) {
-                let path = '01. refs/references.bib';
-                try {
-                    // Check if file exists (naive check by trying to get content)
-                    await getFileContent(token, indexOwner, indexRepoName, path);
-                } catch {
-                    path = 'refs/references.bib';
-                }
-
-                try {
-                    const { content } = await getFileContent(token, indexOwner, indexRepoName, path);
-                    const refs = parseBibTeX(content);
-                    globalRefsList.push(...refs);
-                } catch (e: any) {
-                    console.warn('Failed to fetch global refs', e);
-                    // Only set error if we really expected it to work (e.g. repo exists)
-                    if (indexRepo) {
-                        setError(`Failed to fetch global refs: ${e.message || 'Unknown error'}`);
-                    }
-                }
-            } else {
-                console.warn('Could not determine research-index owner');
-            }
-
-            // 2. Fetch from ALL Paper Repositories (for Global Aggregation)
-            const paperRepos = repos.filter(r => r.name.startsWith('paper-'));
-
-            // Use Promise.allSettled to fetch in parallel without failing everything
-            const paperPromises = paperRepos.map(async (repo) => {
-                try {
-                    const { content } = await getFileContent(token, repo.owner, repo.name, 'references.bib');
-                    return parseBibTeX(content);
-                } catch {
-                    return [];
-                }
-            });
-
-            const paperResults = await Promise.allSettled(paperPromises);
-            paperResults.forEach(result => {
-                if (result.status === 'fulfilled') {
-                    globalRefsList.push(...result.value);
-                }
-            });
-
-            // 3. Fetch from Current Repository (Local)
-            if (currentRepo && currentRepo.name !== 'research-index') {
-                try {
-                    const { content } = await getFileContent(token, currentRepo.owner, currentRepo.name, 'references.bib');
-                    const refs = parseBibTeX(content);
-                    localRefsList.push(...refs);
-                } catch (e) {
-                    // It's okay if local repo doesn't have references.bib
-                }
-            }
-
-            // Deduplicate Global List
-            const globalMap = new Map<string, Reference & { source: string }>();
-            globalRefsList.forEach(r => globalMap.set(r.id, { ...r, source: 'global' }));
-
-            // Deduplicate Local List
-            const localMap = new Map<string, Reference & { source: string }>();
-            localRefsList.forEach(r => localMap.set(r.id, { ...r, source: 'local' }));
-
-            // Combine for state, but keep source distinction
-            // We want to show:
-            // - If activeTab === 'global': Show everything in globalMap
-            // - If activeTab === 'local': Show everything in localMap
-
-            // We can just store them all in one list with 'source' property, 
-            // but since an item can be in BOTH, we need to handle that.
-            // The current UI filters by `ref.source === activeTab`.
-            // So if an item is in both, it needs to appear in both lists.
-
-            // Let's create a combined list where items might appear twice if they are in both?
-            // Or better: The `source` property should probably be 'global' | 'local' | 'both'?
-            // Or just simpler: The `references` state should contain ALL unique references, 
-            // and we filter based on whether they exist in the global set or local set.
-
-            // Let's stick to the current structure: List of references with a `source` tag.
-            // If it's in both, we can mark it as 'local' (priority) but maybe show it in global too?
-            // Actually, the user wants "Global" tab and "Local" tab.
-            // If I have a ref "X" in both:
-            // - Global tab: Show X
-            // - Local tab: Show X
-
-            // So I should probably just store two separate lists in state?
-            // Or just one list and `source` can be 'global' or 'local' or 'both'.
-
-            const combinedRefs: (Reference & { source: string })[] = [];
-
-            // Add all global refs
-            for (const ref of globalMap.values()) {
-                combinedRefs.push(ref);
-            }
-
-            // Add local refs. If ID exists in global, update it to 'both' or just add it?
-            // If we update to 'both', then the filter logic needs to change.
-            // Let's change the filter logic to:
-            // if activeTab === 'local', show if source === 'local' || source === 'both'
-            // if activeTab === 'global', show if source === 'global' || source === 'both'
-
-            for (const ref of localMap.values()) {
-                const existing = globalMap.get(ref.id);
-                if (existing) {
-                    // It's in both. Let's find it in combinedRefs and update source
-                    const index = combinedRefs.findIndex(r => r.id === ref.id);
-                    if (index !== -1) {
-                        combinedRefs[index].source = 'both';
-                    }
-                } else {
-                    combinedRefs.push(ref);
-                }
-            }
-
-            setReferences(combinedRefs);
-
-        } catch (error: any) {
-            console.error('Failed to fetch references', error);
-            setError(error.message || 'Failed to fetch references');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchReferences();
-    }, [token, repos, currentRepo, user]);
+    // Form State
+    const [formType, setFormType] = useState('article');
+    const [formTitle, setFormTitle] = useState('');
+    const [formAuthor, setFormAuthor] = useState('');
+    const [formYear, setFormYear] = useState('');
+    const [formUrl, setFormUrl] = useState('');
+    const [formDoi, setFormDoi] = useState('');
+    const [formId, setFormId] = useState('');
 
     const handleAddReference = async () => {
-        if (!token || !newEntry.trim()) return;
+        // Generate ID if missing
+        let id = formId;
+        if (!id && formAuthor && formYear) {
+            const lastName = formAuthor.split(' ')[0].toLowerCase().replace(/[^a-z]/g, '');
+            id = `${lastName}${formYear}`;
+        }
 
-        const indexRepo = repos.find(r => r.name === 'research-index');
-        if (!indexRepo) return;
+        if (!id || !formTitle) {
+            alert('Please provide at least an ID and Title');
+            return;
+        }
+
+        const newEntry = `@${formType}{${id},
+  title = {${formTitle}},
+  author = {${formAuthor}},
+  year = {${formYear}}${formUrl ? `,\n  url = {${formUrl}}` : ''}${formDoi ? `,\n  doi = {${formDoi}}` : ''}
+}`;
 
         setAdding(true);
         try {
-            let path = '01. refs/references.bib';
-            let currentContent = '';
-            let sha = '';
+            await addReference(newEntry);
 
-            try {
-                const file = await getFileContent(token, indexRepo.name.split('/')[0], indexRepo.name, path);
-                currentContent = file.content;
-                sha = file.sha;
-            } catch {
-                path = 'refs/references.bib';
-                const file = await getFileContent(token, indexRepo.name.split('/')[0], indexRepo.name, path);
-                currentContent = file.content;
-                sha = file.sha;
-            }
-
-            // Append new entry
-            const updatedContent = currentContent + '\n\n' + newEntry;
-
-            await updateFile(
-                token,
-                indexRepo.name.split('/')[0],
-                indexRepo.name,
-                path,
-                updatedContent,
-                'Add new reference',
-                sha
-            );
-
-            setNewEntry('');
+            // Reset Form
+            setFormTitle('');
+            setFormAuthor('');
+            setFormYear('');
+            setFormUrl('');
+            setFormDoi('');
+            setFormId('');
             setShowAdd(false);
-            fetchReferences(); // Refresh list
         } catch (error) {
             console.error('Failed to add reference', error);
             alert('Failed to add reference');
@@ -307,14 +122,63 @@ export function ReferenceManager() {
                 )}
 
                 {showAdd ? (
-                    <div className="space-y-2 animate-in slide-in-from-top-2 fade-in duration-200">
-                        <textarea
-                            value={newEntry}
-                            onChange={(e) => setNewEntry(e.target.value)}
-                            placeholder="@article{key, ...}"
-                            className="w-full h-32 p-2 text-xs font-mono border border-neutral-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-neutral-800"
-                        />
-                        <div className="flex justify-end gap-2">
+                    <div className="space-y-2 animate-in slide-in-from-top-2 fade-in duration-200 bg-white dark:bg-neutral-800 p-3 rounded-md border border-neutral-200 dark:border-neutral-700">
+                        <div className="space-y-2">
+                            <select
+                                value={formType}
+                                onChange={(e) => setFormType(e.target.value)}
+                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                            >
+                                <option value="article">Article</option>
+                                <option value="book">Book</option>
+                                <option value="inproceedings">Conference</option>
+                                <option value="misc">Misc</option>
+                            </select>
+                            <input
+                                type="text"
+                                placeholder="ID (optional)"
+                                value={formId}
+                                onChange={(e) => setFormId(e.target.value)}
+                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                            />
+                            <input
+                                type="text"
+                                placeholder="Title"
+                                value={formTitle}
+                                onChange={(e) => setFormTitle(e.target.value)}
+                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                            />
+                            <input
+                                type="text"
+                                placeholder="Author"
+                                value={formAuthor}
+                                onChange={(e) => setFormAuthor(e.target.value)}
+                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                            />
+                            <input
+                                type="text"
+                                placeholder="Year"
+                                value={formYear}
+                                onChange={(e) => setFormYear(e.target.value)}
+                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                            />
+                            <input
+                                type="text"
+                                placeholder="URL (optional)"
+                                value={formUrl}
+                                onChange={(e) => setFormUrl(e.target.value)}
+                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                            />
+                            <input
+                                type="text"
+                                placeholder="DOI (optional)"
+                                value={formDoi}
+                                onChange={(e) => setFormDoi(e.target.value)}
+                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                            />
+                        </div>
+
+                        <div className="flex justify-end gap-2 mt-3">
                             <button
                                 onClick={() => setShowAdd(false)}
                                 className="px-2 py-1 text-xs text-neutral-500 hover:text-neutral-700"
@@ -352,7 +216,17 @@ export function ReferenceManager() {
                     filteredRefs.map((ref) => (
                         <div
                             key={ref.id}
-                            className="p-3 bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 hover:border-blue-300 dark:hover:border-blue-700 transition-colors group"
+                            onClick={() => {
+                                if (ref.url) {
+                                    window.open(ref.url, '_blank');
+                                } else if (ref.doi) {
+                                    window.open(`https://doi.org/${ref.doi}`, '_blank');
+                                }
+                            }}
+                            className={clsx(
+                                "p-3 bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 transition-colors group relative",
+                                (ref.url || ref.doi) ? "cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/10" : ""
+                            )}
                         >
                             <div className="flex items-start justify-between gap-2">
                                 <div className="font-medium text-sm text-neutral-900 dark:text-neutral-100 line-clamp-2">
@@ -380,6 +254,19 @@ export function ReferenceManager() {
                                         {ref.source === 'both' ? 'LOCAL+GLOBAL' : ref.source}
                                     </span>
                                 )}
+                            </div>
+
+                            {/* Cite Button - Visible on Hover */}
+                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setCitationToInsert(`\\cite{${ref.id}}`);
+                                    }}
+                                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded shadow-sm hover:bg-blue-700"
+                                >
+                                    Cite
+                                </button>
                             </div>
                         </div>
                     ))

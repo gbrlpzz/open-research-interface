@@ -11,7 +11,7 @@ interface AppState {
     files: FileNode[]; // Files in current path
     openFiles: { path: string; content: string; sha: string; repo: string; owner: string }[];
     activeFile: string | null; // Path of the active file
-    viewMode: 'repo' | 'paper';
+    viewMode: 'repo' | 'paper' | 'references';
     drafts: import('./types').Draft[];
     currentDraft: string | null; // ID of the current draft
 
@@ -21,9 +21,12 @@ interface AppState {
     setCurrentRepo: (repo: Repo | null) => void;
     setCurrentPath: (path: string) => void;
     setFiles: (files: FileNode[]) => void;
-    setViewMode: (mode: 'repo' | 'paper') => void;
+    setViewMode: (mode: 'repo' | 'paper' | 'references') => void;
     setDrafts: (drafts: import('./types').Draft[]) => void;
     setCurrentDraft: (draftId: string | null) => void;
+
+    citationToInsert: string | null;
+    setCitationToInsert: (citation: string | null) => void;
 
     openFile: (file: { path: string; content: string; sha: string; repo: string; owner: string }) => void;
     closeFile: (path: string) => void;
@@ -55,6 +58,9 @@ export const useStore = create<AppState>()(
             setViewMode: (mode) => set({ viewMode: mode }),
             setDrafts: (drafts) => set({ drafts }),
             setCurrentDraft: (draftId) => set({ currentDraft: draftId }),
+
+            citationToInsert: null,
+            setCitationToInsert: (citation) => set({ citationToInsert: citation }),
 
             openFile: (file) => set((state) => {
                 const exists = state.openFiles.find((f) => f.path === file.path && f.repo === file.repo);
