@@ -40,7 +40,8 @@ export const getRepoContents = async (
     token: string,
     owner: string,
     repo: string,
-    path: string = ''
+    path: string = '',
+    ref?: string
 ): Promise<FileNode[] | FileNode> => {
     const octokit = createClient(token);
     try {
@@ -48,6 +49,7 @@ export const getRepoContents = async (
             owner,
             repo,
             path,
+            ref,
         });
 
         if (Array.isArray(data)) {
@@ -81,13 +83,15 @@ export const getFileContent = async (
     token: string,
     owner: string,
     repo: string,
-    path: string
+    path: string,
+    ref?: string
 ): Promise<{ content: string; sha: string }> => {
     const octokit = createClient(token);
     const { data } = await octokit.rest.repos.getContent({
         owner,
         repo,
         path,
+        ref,
     });
 
     if (Array.isArray(data) || data.type !== 'file') {
@@ -105,7 +109,8 @@ export const updateFile = async (
     path: string,
     content: string,
     message: string,
-    sha?: string
+    sha?: string,
+    branch?: string
 ) => {
     const octokit = createClient(token);
 
@@ -117,6 +122,7 @@ export const updateFile = async (
                 owner,
                 repo,
                 path,
+                ref: branch,
             });
             if (!Array.isArray(data)) {
                 fileSha = data.sha;
@@ -133,6 +139,7 @@ export const updateFile = async (
         message,
         content: btoa(content),
         sha: fileSha,
+        branch,
     });
 };
 
@@ -152,233 +159,96 @@ export const createRepo = async (
     return data;
 };
 
-export const getDrafts = async (
+// --- Branch Management (Git-Native Drafts) ---
+
+export const getBranches = async (
     token: string,
     owner: string,
     repo: string
-): Promise<import('./types').Draft[]> => {
+): Promise<string[]> => {
     const octokit = createClient(token);
-    try {
-        const { data } = await octokit.rest.repos.getContent({
-            owner,
-            repo,
-            path: 'drafts',
-        });
-
-        if (!Array.isArray(data)) return [];
-
-        // Filter for directories that look like 'draft-*'
-        const draftDirs = data.filter(
-            (item) => item.type === 'dir' && item.name.startsWith('draft-')
-        );
-
-        const drafts = await Promise.all(draftDirs.map(async (dir) => {
-            try {
-                const { content } = await getFileContent(token, owner, repo, `${dir.path}/meta.json`);
-                const meta = JSON.parse(content);
-                return {
-                    id: dir.name,
-                    name: meta.name || dir.name,
-                    path: `${dir.path}/main.tex`,
-                    updated_at: meta.created_at || new Date().toISOString(),
-                };
-            } catch (e) {
-                // Fallback if meta.json is missing
-                return {
-                    id: dir.name,
-                    name: dir.name.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                    path: `${dir.path}/main.tex`,
-                    updated_at: new Date().toISOString(),
-                };
-            }
-        }));
-
-        return drafts;
-    } catch (error) {
-        // If drafts folder doesn't exist, return empty array
-        return [];
-    }
-};
-
-export const createDraft = async (
-    token: string,
-    owner: string,
-    repo: string,
-    baseContent: string,
-    draftName?: string
-) => {
-    // 1. Find next draft number
-    const drafts = await getDrafts(token, owner, repo);
-    let nextNum = 1;
-    if (drafts.length > 0) {
-        const nums = drafts
-            .map(d => parseInt(d.id.replace('draft-', '')))
-            .filter(n => !isNaN(n));
-        if (nums.length > 0) {
-            nextNum = Math.max(...nums) + 1;
-        }
-    }
-
-    const draftId = `draft-${nextNum}`;
-    const draftPath = `drafts/${draftId}/main.tex`;
-    const metaPath = `drafts/${draftId}/meta.json`;
-
-    // 2. Create main.tex
-    await updateFile(
-        token,
+    const { data } = await octokit.rest.repos.listBranches({
         owner,
         repo,
-        draftPath,
-        baseContent,
-        `Create ${draftId}`
-    );
-
-    // 3. Create meta.json
-    const meta = {
-        created_at: new Date().toISOString(),
-        name: draftName || `Draft ${nextNum}`,
-        base_sha: 'TODO', // We could pass this if needed
-    };
-
-    await updateFile(
-        token,
-        owner,
-        repo,
-        metaPath,
-        JSON.stringify(meta, null, 2),
-        `Create ${draftId} metadata`
-    );
-
-    return {
-        id: draftId,
-        name: meta.name,
-        path: draftPath,
-        updated_at: meta.created_at
-    };
+    });
+    return data.map(b => b.name);
 };
 
-export const deleteDraft = async (
+export const createBranch = async (
     token: string,
     owner: string,
     repo: string,
-    draftId: string
+    branchName: string,
+    fromBranch: string = 'main'
 ) => {
     const octokit = createClient(token);
-    const draftPath = `drafts/${draftId}`;
 
-    // Delete main.tex
-    try {
-        const { data: mainData } = await octokit.rest.repos.getContent({
-            owner,
-            repo,
-            path: `${draftPath}/main.tex`,
-        });
-        if (!Array.isArray(mainData)) {
-            await octokit.rest.repos.deleteFile({
-                owner,
-                repo,
-                path: `${draftPath}/main.tex`,
-                message: `Delete ${draftId} main.tex`,
-                sha: mainData.sha,
-            });
-        }
-    } catch (e) { /* Ignore if missing */ }
+    // 1. Get SHA of fromBranch
+    const { data: refData } = await octokit.rest.git.getRef({
+        owner,
+        repo,
+        ref: `heads/${fromBranch}`,
+    });
+    const sha = refData.object.sha;
 
-    // Delete meta.json
-    try {
-        const { data: metaData } = await octokit.rest.repos.getContent({
-            owner,
-            repo,
-            path: `${draftPath}/meta.json`,
-        });
-        if (!Array.isArray(metaData)) {
-            await octokit.rest.repos.deleteFile({
-                owner,
-                repo,
-                path: `${draftPath}/meta.json`,
-                message: `Delete ${draftId} meta.json`,
-                sha: metaData.sha,
-            });
-        }
-    } catch (e) { /* Ignore if missing */ }
+    // 2. Create new ref
+    await octokit.rest.git.createRef({
+        owner,
+        repo,
+        ref: `refs/heads/${branchName}`,
+        sha,
+    });
 };
 
-export const renameDraft = async (
+export const deleteBranch = async (
     token: string,
     owner: string,
     repo: string,
-    draftId: string,
+    branchName: string
+) => {
+    const octokit = createClient(token);
+    await octokit.rest.git.deleteRef({
+        owner,
+        repo,
+        ref: `heads/${branchName}`,
+    });
+};
+
+export const mergeBranch = async (
+    token: string,
+    owner: string,
+    repo: string,
+    head: string, // branch to merge (e.g. 'draft-1')
+    base: string // target branch (e.g. 'main')
+) => {
+    const octokit = createClient(token);
+    await octokit.rest.repos.merge({
+        owner,
+        repo,
+        base,
+        head,
+        commit_message: `Merge branch '${head}' into ${base}`,
+    });
+};
+
+export const renameBranch = async (
+    token: string,
+    owner: string,
+    repo: string,
+    oldName: string,
     newName: string
 ) => {
-    const metaPath = `drafts/${draftId}/meta.json`;
+    // GitHub doesn't have a rename endpoint for branches.
+    // We must create a new branch from the old one, then delete the old one.
 
-    // Get existing meta
-    let meta: any = {};
-    try {
-        const { content } = await getFileContent(token, owner, repo, metaPath);
-        meta = JSON.parse(content);
-    } catch (e) {
-        // Create new if missing
-        meta = { created_at: new Date().toISOString() };
-    }
+    // 1. Create new branch from old branch
+    await createBranch(token, owner, repo, newName, oldName);
 
-    meta.name = newName;
-
-    await updateFile(
-        token,
-        owner,
-        repo,
-        metaPath,
-        JSON.stringify(meta, null, 2),
-        `Rename ${draftId} to "${newName}"`
-    );
+    // 2. Delete old branch
+    await deleteBranch(token, owner, repo, oldName);
 };
 
-export const createBackup = async (
-    token: string,
-    owner: string,
-    repo: string,
-    content: string,
-    suffix: string
-) => {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupPath = `backups/main-${suffix}-${timestamp}.tex`;
+// --- Legacy Draft Functions (Deprecated/Removed) ---
+// Kept empty or minimal if needed to prevent build errors during transition, 
+// but ideally we remove usages.
 
-    await updateFile(
-        token,
-        owner,
-        repo,
-        backupPath,
-        content,
-        `Backup main before ${suffix}`
-    );
-};
-
-export const mergeDraft = async (
-    token: string,
-    owner: string,
-    repo: string,
-    draftContent: string,
-    draftId: string,
-    shouldBackup: boolean = false
-) => {
-    // Optional: Backup main before merge
-    if (shouldBackup) {
-        try {
-            const { content: currentMain } = await getFileContent(token, owner, repo, 'main.tex');
-            await createBackup(token, owner, repo, currentMain, `merge-${draftId}`);
-        } catch (e) {
-            console.warn('Failed to create backup, proceeding with merge', e);
-        }
-    }
-
-    // Overwrite main.tex
-    await updateFile(
-        token,
-        owner,
-        repo,
-        'main.tex',
-        draftContent,
-        `Merge ${draftId} into main`
-    );
-};

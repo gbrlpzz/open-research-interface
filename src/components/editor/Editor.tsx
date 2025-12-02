@@ -19,6 +19,7 @@ export function Editor() {
         setActiveFile,
         viewMode,
         currentRepo,
+        currentBranch,
     } = useStore();
 
     const [saving, setSaving] = useState(false);
@@ -67,7 +68,8 @@ export function Editor() {
                 currentFile.path,
                 currentFile.content,
                 commitMessage,
-                currentFile.sha
+                currentFile.sha,
+                currentBranch // Pass current branch to updateFile
             );
             setShowCommitInput(false);
             setCommitMessage('');
@@ -128,8 +130,11 @@ export function Editor() {
             {/* Toolbar */}
             <div className="p-2 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between bg-white dark:bg-neutral-900">
                 <div className="flex items-center gap-3">
-                    <div className="text-sm text-neutral-500 truncate px-2">
-                        {currentFile.repo} / {currentFile.path}
+                    <div className="text-sm text-neutral-500 truncate px-2 flex items-center gap-2">
+                        <span className="px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-800 rounded text-xs font-mono text-neutral-600 dark:text-neutral-400">
+                            {currentBranch}
+                        </span>
+                        <span>{currentFile.path}</span>
                     </div>
                     {isPaperMainDoc && (
                         <div className="flex items-center bg-neutral-100 dark:bg-neutral-800 rounded-md p-0.5">

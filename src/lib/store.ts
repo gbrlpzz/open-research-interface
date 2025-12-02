@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User, Repo, FileNode } from './types';
+import { User, Repo, FileNode, Draft } from './types';
 
 interface AppState {
     token: string | null;
@@ -12,6 +12,12 @@ interface AppState {
     openFiles: { path: string; content: string; sha: string; repo: string; owner: string }[];
     activeFile: string | null; // Path of the active file
     viewMode: 'repo' | 'paper' | 'references';
+
+    // Branching / Drafts
+    currentBranch: string;
+    branches: string[];
+
+    // Legacy Drafts (kept for compatibility if needed, or remove)
     drafts: import('./types').Draft[];
     currentDraft: string | null; // ID of the current draft
 
@@ -22,7 +28,11 @@ interface AppState {
     setCurrentPath: (path: string) => void;
     setFiles: (files: FileNode[]) => void;
     setViewMode: (mode: 'repo' | 'paper' | 'references') => void;
-    setDrafts: (drafts: import('./types').Draft[]) => void;
+
+    setCurrentBranch: (branch: string) => void;
+    setBranches: (branches: string[]) => void;
+
+    setDrafts: (drafts: Draft[]) => void;
     setCurrentDraft: (draftId: string | null) => void;
 
     citationToInsert: string | null;
@@ -46,6 +56,10 @@ export const useStore = create<AppState>()(
             openFiles: [],
             activeFile: null,
             viewMode: 'repo',
+
+            currentBranch: 'main',
+            branches: ['main'],
+
             drafts: [],
             currentDraft: null,
 
@@ -56,6 +70,8 @@ export const useStore = create<AppState>()(
             setCurrentPath: (path) => set({ currentPath: path }),
             setFiles: (files) => set({ files }),
             setViewMode: (mode) => set({ viewMode: mode }),
+            setCurrentBranch: (branch) => set({ currentBranch: branch }),
+            setBranches: (branches) => set({ branches }),
             setDrafts: (drafts) => set({ drafts }),
             setCurrentDraft: (draftId) => set({ currentDraft: draftId }),
 
@@ -95,7 +111,13 @@ export const useStore = create<AppState>()(
         }),
         {
             name: 'open-research-storage',
-            partialize: (state) => ({ token: state.token, user: state.user }), // Only persist auth
+            partialize: (state) => ({
+                token: state.token,
+                user: state.user,
+                currentRepo: state.currentRepo,
+                currentBranch: state.currentBranch,
+                viewMode: state.viewMode
+            }),
         }
     )
 );
