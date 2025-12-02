@@ -41,6 +41,7 @@ export function ReferenceManager() {
     const { token, repos, currentRepo, user } = useStore();
     const [references, setReferences] = useState<(Reference & { source?: string })[]>([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [showAdd, setShowAdd] = useState(false);
     const [newEntry, setNewEntry] = useState('');
@@ -51,6 +52,7 @@ export function ReferenceManager() {
         if (!token) return;
 
         setLoading(true);
+        setError(null);
         const globalRefsList: Reference[] = [];
         const localRefsList: Reference[] = [];
 
@@ -82,9 +84,15 @@ export function ReferenceManager() {
                     const { content } = await getFileContent(token, indexOwner, indexRepoName, path);
                     const refs = parseBibTeX(content);
                     globalRefsList.push(...refs);
-                } catch (e) {
+                } catch (e: any) {
                     console.warn('Failed to fetch global refs', e);
+                    // Only set error if we really expected it to work (e.g. repo exists)
+                    if (indexRepo) {
+                        setError(`Failed to fetch global refs: ${e.message || 'Unknown error'}`);
+                    }
                 }
+            } else {
+                console.warn('Could not determine research-index owner');
             }
 
             // 2. Fetch from ALL Paper Repositories (for Global Aggregation)
@@ -179,8 +187,11 @@ export function ReferenceManager() {
 
             setReferences(combinedRefs);
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to fetch references', error);
+            setError(error.message || 'Failed to fetch references');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -289,6 +300,12 @@ export function ReferenceManager() {
                     </button>
                 </div>
 
+                {error && (
+                    <div className="p-2 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+                        {error}
+                    </div>
+                )}
+
                 {showAdd ? (
                     <div className="space-y-2 animate-in slide-in-from-top-2 fade-in duration-200">
                         <textarea
@@ -368,7 +385,9 @@ export function ReferenceManager() {
                     ))
                 )}
                 {filteredRefs.length === 0 && !loading && (
-                    <div className="p-4 text-center text-xs text-neutral-400">No references found</div>
+                    <div className="p-4 text-center text-xs text-neutral-400">
+                        {error ? 'Error loading references' : 'No references found'}
+                    </div>
                 )}
             </div>
         </div>
