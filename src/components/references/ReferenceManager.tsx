@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { useReferences } from '@/hooks/useReferences';
-import { Plus, Search, Loader2 } from 'lucide-react';
+import { Plus, Search, Loader2, Edit2 } from 'lucide-react';
 import clsx from 'clsx';
 
 export function ReferenceManager() {
     const { setCitationToInsert } = useStore();
-    const { references, loading, error, addReference } = useReferences();
+    const { references, loading, error, addReference, updateReference } = useReferences();
 
     const [search, setSearch] = useState('');
     const [showAdd, setShowAdd] = useState(false);
@@ -14,6 +14,9 @@ export function ReferenceManager() {
     const [activeTab, setActiveTab] = useState<'local' | 'global'>('local');
 
     // Form State
+    const [isEditing, setIsEditing] = useState(false);
+    const [originalId, setOriginalId] = useState('');
+
     const [formType, setFormType] = useState('article');
     const [formTitle, setFormTitle] = useState('');
     const [formAuthor, setFormAuthor] = useState('');
@@ -22,7 +25,7 @@ export function ReferenceManager() {
     const [formDoi, setFormDoi] = useState('');
     const [formId, setFormId] = useState('');
 
-    const handleAddReference = async () => {
+    const handleSaveReference = async () => {
         // Generate ID if missing
         let id = formId;
         if (!id && formAuthor && formYear) {
@@ -43,22 +46,48 @@ export function ReferenceManager() {
 
         setAdding(true);
         try {
-            await addReference(newEntry);
+            if (isEditing && originalId) {
+                await updateReference(originalId, newEntry);
+            } else {
+                await addReference(newEntry);
+            }
 
             // Reset Form
-            setFormTitle('');
-            setFormAuthor('');
-            setFormYear('');
-            setFormUrl('');
-            setFormDoi('');
-            setFormId('');
+            resetForm();
             setShowAdd(false);
         } catch (error) {
-            console.error('Failed to add reference', error);
-            alert('Failed to add reference');
+            console.error('Failed to save reference', error);
+            alert('Failed to save reference');
         } finally {
             setAdding(false);
         }
+    };
+
+    const resetForm = () => {
+        setFormTitle('');
+        setFormAuthor('');
+        setFormYear('');
+        setFormUrl('');
+        setFormDoi('');
+        setFormId('');
+        setFormType('article');
+        setIsEditing(false);
+        setOriginalId('');
+    };
+
+    const startEditing = (ref: any, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setFormType(ref.type || 'article');
+        setFormTitle(ref.title || '');
+        setFormAuthor(ref.author || '');
+        setFormYear(ref.year || '');
+        setFormUrl(ref.url || '');
+        setFormDoi(ref.doi || '');
+        setFormId(ref.id || '');
+
+        setOriginalId(ref.id);
+        setIsEditing(true);
+        setShowAdd(true);
     };
 
     const filteredRefs = references.filter(ref => {
@@ -74,15 +103,18 @@ export function ReferenceManager() {
     });
 
     return (
-        <div className="w-80 h-full border-l border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 flex flex-col">
-            <div className="p-4 border-b border-neutral-200 dark:border-neutral-700 space-y-3">
+        <div className="w-80 h-full border-l border-olive-medium/20 bg-paper flex flex-col">
+            <div className="p-4 border-b border-olive-medium/20 space-y-3">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                    <h2 className="text-sm font-semibold text-olive-medium uppercase tracking-wider">
                         References
                     </h2>
                     <button
-                        onClick={() => setShowAdd(!showAdd)}
-                        className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded text-neutral-500 hover:text-blue-600 transition-colors"
+                        onClick={() => {
+                            resetForm();
+                            setShowAdd(!showAdd);
+                        }}
+                        className="p-1 hover:bg-olive-medium/10 rounded text-olive-medium hover:text-olive-dark transition-colors"
                         title="Add Reference"
                     >
                         <Plus className="w-4 h-4" />
@@ -90,14 +122,14 @@ export function ReferenceManager() {
                 </div>
 
                 {/* Tab Toggle */}
-                <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-md">
+                <div className="flex p-1 bg-olive-medium/10 rounded-md">
                     <button
                         onClick={() => setActiveTab('local')}
                         className={clsx(
                             "flex-1 py-1 text-xs font-medium rounded-sm transition-colors",
                             activeTab === 'local'
-                                ? "bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm"
-                                : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+                                ? "bg-paper text-olive-dark shadow-sm"
+                                : "text-olive-medium hover:text-olive-dark"
                         )}
                     >
                         Local
@@ -107,8 +139,8 @@ export function ReferenceManager() {
                         className={clsx(
                             "flex-1 py-1 text-xs font-medium rounded-sm transition-colors",
                             activeTab === 'global'
-                                ? "bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-sm"
-                                : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+                                ? "bg-paper text-olive-dark shadow-sm"
+                                : "text-olive-medium hover:text-olive-dark"
                         )}
                     >
                         Global
@@ -116,18 +148,23 @@ export function ReferenceManager() {
                 </div>
 
                 {error && (
-                    <div className="p-2 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+                    <div className="p-2 text-xs text-red-600 bg-red-50 rounded border border-red-200">
                         {error}
                     </div>
                 )}
 
                 {showAdd ? (
-                    <div className="space-y-2 animate-in slide-in-from-top-2 fade-in duration-200 bg-white dark:bg-neutral-800 p-3 rounded-md border border-neutral-200 dark:border-neutral-700">
+                    <div className="space-y-2 animate-in slide-in-from-top-2 fade-in duration-200 bg-paper p-3 rounded-md border border-olive-medium/20 shadow-sm">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold uppercase text-olive-medium">
+                                {isEditing ? 'Edit Reference' : 'New Reference'}
+                            </span>
+                        </div>
                         <div className="space-y-2">
                             <select
                                 value={formType}
                                 onChange={(e) => setFormType(e.target.value)}
-                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                                className="w-full p-1.5 text-xs border border-olive-medium/20 rounded bg-transparent text-olive-dark focus:border-olive-medium focus:outline-none"
                             >
                                 <option value="article">Article</option>
                                 <option value="book">Book</option>
@@ -139,71 +176,74 @@ export function ReferenceManager() {
                                 placeholder="ID (optional)"
                                 value={formId}
                                 onChange={(e) => setFormId(e.target.value)}
-                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                                className="w-full p-1.5 text-xs border border-olive-medium/20 rounded bg-transparent text-olive-dark focus:border-olive-medium focus:outline-none"
                             />
                             <input
                                 type="text"
                                 placeholder="Title"
                                 value={formTitle}
                                 onChange={(e) => setFormTitle(e.target.value)}
-                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                                className="w-full p-1.5 text-xs border border-olive-medium/20 rounded bg-transparent text-olive-dark focus:border-olive-medium focus:outline-none"
                             />
                             <input
                                 type="text"
                                 placeholder="Author"
                                 value={formAuthor}
                                 onChange={(e) => setFormAuthor(e.target.value)}
-                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                                className="w-full p-1.5 text-xs border border-olive-medium/20 rounded bg-transparent text-olive-dark focus:border-olive-medium focus:outline-none"
                             />
                             <input
                                 type="text"
                                 placeholder="Year"
                                 value={formYear}
                                 onChange={(e) => setFormYear(e.target.value)}
-                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                                className="w-full p-1.5 text-xs border border-olive-medium/20 rounded bg-transparent text-olive-dark focus:border-olive-medium focus:outline-none"
                             />
                             <input
                                 type="text"
                                 placeholder="URL (optional)"
                                 value={formUrl}
                                 onChange={(e) => setFormUrl(e.target.value)}
-                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                                className="w-full p-1.5 text-xs border border-olive-medium/20 rounded bg-transparent text-olive-dark focus:border-olive-medium focus:outline-none"
                             />
                             <input
                                 type="text"
                                 placeholder="DOI (optional)"
                                 value={formDoi}
                                 onChange={(e) => setFormDoi(e.target.value)}
-                                className="w-full p-1.5 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-transparent"
+                                className="w-full p-1.5 text-xs border border-olive-medium/20 rounded bg-transparent text-olive-dark focus:border-olive-medium focus:outline-none"
                             />
                         </div>
 
                         <div className="flex justify-end gap-2 mt-3">
                             <button
-                                onClick={() => setShowAdd(false)}
-                                className="px-2 py-1 text-xs text-neutral-500 hover:text-neutral-700"
+                                onClick={() => {
+                                    setShowAdd(false);
+                                    resetForm();
+                                }}
+                                className="px-2 py-1 text-xs text-olive-medium hover:text-olive-dark"
                             >
                                 Cancel
                             </button>
                             <button
-                                onClick={handleAddReference}
+                                onClick={handleSaveReference}
                                 disabled={adding}
-                                className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                                className="px-2 py-1 text-xs bg-olive-dark text-olive-light rounded hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
                             >
                                 {adding && <Loader2 className="w-3 h-3 animate-spin" />}
-                                Add
+                                {isEditing ? 'Update' : 'Add'}
                             </button>
                         </div>
                     </div>
                 ) : (
                     <div className="relative">
-                        <Search className="absolute left-2 top-2.5 w-4 h-4 text-neutral-400" />
+                        <Search className="absolute left-2 top-2.5 w-4 h-4 text-olive-medium" />
                         <input
                             type="text"
                             placeholder="Search refs..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-full pl-8 pr-3 py-2 bg-neutral-100 dark:bg-neutral-800 border-none rounded-md text-sm focus:ring-1 focus:ring-blue-500"
+                            className="w-full pl-8 pr-3 py-2 bg-olive-medium/5 border-none rounded-md text-sm text-olive-dark placeholder:text-olive-medium/50 focus:ring-1 focus:ring-olive-medium"
                         />
                     </div>
                 )}
@@ -211,7 +251,7 @@ export function ReferenceManager() {
 
             <div className="flex-1 overflow-y-auto p-2 space-y-2">
                 {loading ? (
-                    <div className="p-4 text-center text-sm text-neutral-500">Loading references...</div>
+                    <div className="p-4 text-center text-sm text-olive-medium">Loading references...</div>
                 ) : (
                     filteredRefs.map((ref) => (
                         <div
@@ -224,23 +264,23 @@ export function ReferenceManager() {
                                 }
                             }}
                             className={clsx(
-                                "p-3 bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 transition-colors group relative",
-                                (ref.url || ref.doi) ? "cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/10" : ""
+                                "p-3 bg-paper rounded-md border border-olive-medium/20 transition-colors group relative",
+                                (ref.url || ref.doi) ? "cursor-pointer hover:border-olive-medium hover:bg-olive-medium/5" : ""
                             )}
                         >
                             <div className="flex items-start justify-between gap-2">
-                                <div className="font-medium text-sm text-neutral-900 dark:text-neutral-100 line-clamp-2">
+                                <div className="font-medium text-sm text-olive-dark line-clamp-2">
                                     {ref.title || 'Untitled'}
                                 </div>
-                                <span className="text-xs font-mono text-neutral-400 shrink-0">
+                                <span className="text-xs font-mono text-olive-medium shrink-0">
                                     {ref.id}
                                 </span>
                             </div>
-                            <div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 line-clamp-1">
+                            <div className="mt-1 text-xs text-olive-medium line-clamp-1">
                                 {ref.author}
                             </div>
-                            <div className="mt-1 flex items-center gap-2 text-xs text-neutral-400">
-                                <span className="px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-700 rounded">
+                            <div className="mt-1 flex items-center gap-2 text-xs text-olive-medium/70">
+                                <span className="px-1.5 py-0.5 bg-olive-medium/10 rounded">
                                     {ref.type}
                                 </span>
                                 {ref.year && <span>{ref.year}</span>}
@@ -248,22 +288,29 @@ export function ReferenceManager() {
                                     <span className={clsx(
                                         "px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider",
                                         (ref.source === 'local' || ref.source === 'both')
-                                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-                                            : "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                                            ? "bg-olive-medium/20 text-olive-dark"
+                                            : "bg-olive-medium/10 text-olive-medium"
                                     )}>
                                         {ref.source === 'both' ? 'LOCAL+GLOBAL' : ref.source}
                                     </span>
                                 )}
                             </div>
 
-                            {/* Cite Button - Visible on Hover */}
-                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {/* Actions - Visible on Hover */}
+                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                                <button
+                                    onClick={(e) => startEditing(ref, e)}
+                                    className="p-1 bg-paper text-olive-medium hover:text-olive-dark rounded shadow-sm border border-olive-medium/20"
+                                    title="Edit"
+                                >
+                                    <Edit2 className="w-3 h-3" />
+                                </button>
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setCitationToInsert(`\\cite{${ref.id}}`);
                                     }}
-                                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded shadow-sm hover:bg-blue-700"
+                                    className="px-2 py-1 bg-olive-dark text-olive-light text-xs rounded shadow-sm hover:opacity-90"
                                 >
                                     Cite
                                 </button>
@@ -272,7 +319,7 @@ export function ReferenceManager() {
                     ))
                 )}
                 {filteredRefs.length === 0 && !loading && (
-                    <div className="p-4 text-center text-xs text-neutral-400">
+                    <div className="p-4 text-center text-xs text-olive-medium">
                         {error ? 'Error loading references' : 'No references found'}
                     </div>
                 )}

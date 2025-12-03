@@ -75,24 +75,21 @@ export function useReferences() {
             }
 
             if (indexOwner) {
-                let path = '01. refs/references.bib';
-                try {
-                    await getFileContent(token, indexOwner, indexRepoName, path);
-                } catch {
-                    path = 'refs/references.bib';
-                }
-
+                const path = 'references.bib';
                 try {
                     const { content } = await getFileContent(token, indexOwner, indexRepoName, path);
                     const refs = parseBibTeX(content);
                     refs.forEach(r => {
                         globalRefsMap.set(r.id, r);
-                        // Mark as used in research-index? Maybe not "used in" but "stored in".
-                        // Let's count research-index as a source but not necessarily "usage" in a paper.
                     });
                 } catch (e: any) {
                     console.warn('Failed to fetch global refs', e);
-                    if (indexRepo) {
+                    // Only set error if it's NOT a 404 (Not Found). 
+                    // If it's 404, it just means the user hasn't created the file yet, which is fine.
+                    // We can treat it as empty.
+                    if (e.message && e.message.includes('Not Found')) {
+                        // Do nothing, just empty refs
+                    } else if (indexRepo) {
                         setError(`Failed to fetch global refs: ${e.message || 'Unknown error'}`);
                     }
                 }
@@ -189,32 +186,105 @@ export function useReferences() {
         const indexRepo = repos.find(r => r.name === 'research-index');
         if (!indexRepo) throw new Error('Research Index not found');
 
-        let path = '01. refs/references.bib';
-        let currentContent = '';
-        let sha = '';
+        // 1. Add to Global (Research Index)
+        const globalPath = 'references.bib';
+        let globalContent = '';
+        let globalSha = '';
 
         try {
-            const file = await getFileContent(token, indexRepo.name.split('/')[0], indexRepo.name, path);
-            currentContent = file.content;
-            sha = file.sha;
+            const file = await getFileContent(token, indexRepo.name.split('/')[0], indexRepo.name, globalPath);
+            globalContent = file.content;
+            globalSha = file.sha;
         } catch {
-            path = 'refs/references.bib';
-            const file = await getFileContent(token, indexRepo.name.split('/')[0], indexRepo.name, path);
-            currentContent = file.content;
-            sha = file.sha;
+            // File might not exist, start empty
         }
 
-        const updatedContent = currentContent + '\n\n' + entry;
+        const updatedGlobalContent = globalContent + '\n\n' + entry;
 
         await updateFile(
             token,
             indexRepo.name.split('/')[0],
             indexRepo.name,
-            path,
-            updatedContent,
+            globalPath,
+            updatedGlobalContent,
             'Add new reference',
-            sha
+            globalSha
         );
+
+        // 2. Add to Local (Current Paper Repo) if applicable
+        if (currentRepo && currentRepo.name.startsWith('paper-')) {
+            const localPath = 'references.bib';
+            let localContent = '';
+            let localSha = '';
+
+            try {
+                const file = await getFileContent(token, currentRepo.owner, currentRepo.name, localPath);
+                localContent = file.content;
+                localSha = file.sha;
+            } catch {
+                // File might not exist
+            }
+
+            const updatedLocalContent = localContent + '\n\n' + entry;
+
+            await updateFile(
+                token,
+                currentRepo.owner,
+                currentRepo.name,
+                localPath,
+                updatedLocalContent,
+                'Add new reference',
+                localSha
+            );
+        }
+
+        await fetchReferences();
+    };
+
+    const updateReference = async (oldId: string, newEntry: string) => {
+        if (!token) return;
+
+        // Helper to update a specific file
+        const updateRefFile = async (owner: string, repo: string, path: string) => {
+            try {
+                const { content, sha } = await getFileContent(token, owner, repo, path);
+                // Regex to find the entry with the old ID
+                // @type{oldId, ... }
+                // We need to be careful with regex matching across lines.
+                // A simple approach is to split by '@', find the block, and replace it.
+
+                const entries = content.split('@');
+                const newEntries = entries.map(e => {
+                    if (!e.trim()) return e;
+                    // Check if this entry has the old ID
+                    const idMatch = e.match(/^{\s*([^,]+),/);
+                    if (idMatch && idMatch[1].trim() === oldId) {
+                        // Replace this entire entry with the new one (minus the leading @ since we split by it)
+                        return newEntry.replace(/^@/, '');
+                    }
+                    return e;
+                });
+
+                const newContent = newEntries.join('@');
+
+                if (newContent !== content) {
+                    await updateFile(token, owner, repo, path, newContent, `Update reference ${oldId}`, sha);
+                }
+            } catch (e) {
+                console.warn(`Failed to update ref in ${repo}`, e);
+            }
+        };
+
+        // 1. Update Global
+        const indexRepo = repos.find(r => r.name === 'research-index');
+        if (indexRepo) {
+            await updateRefFile(indexRepo.name.split('/')[0], indexRepo.name, 'references.bib');
+        }
+
+        // 2. Update Local
+        if (currentRepo && currentRepo.name.startsWith('paper-')) {
+            await updateRefFile(currentRepo.owner, currentRepo.name, 'references.bib');
+        }
 
         await fetchReferences();
     };
@@ -224,6 +294,7 @@ export function useReferences() {
         loading,
         error,
         fetchReferences,
-        addReference
+        addReference,
+        updateReference
     };
 }

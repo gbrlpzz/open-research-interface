@@ -5,7 +5,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { EditorView } from '@codemirror/view';
-import { Save, X, Loader2, Eye, Code, FileText } from 'lucide-react';
+import { Save, X, Loader2, Eye, Code, FileText, Check } from 'lucide-react';
 import clsx from 'clsx';
 import { LatexRenderer } from './LatexRenderer';
 
@@ -43,14 +43,6 @@ export function Editor() {
     }, [citationToInsert, editorView, setCitationToInsert]);
 
     const currentFile = openFiles.find(f => f.path === activeFile);
-
-    const isPaperMainDoc =
-        viewMode === 'paper' &&
-        !!currentRepo &&
-        !!currentFile &&
-        currentFile.repo === currentRepo.name &&
-        (currentFile.path === 'main.tex' || currentFile.path.includes('drafts/')) &&
-        currentRepo.name.startsWith('paper-');
 
     const handleSave = async () => {
         if (!token || !currentFile) return;
@@ -90,7 +82,7 @@ export function Editor() {
 
     if (!activeFile || !currentFile) {
         return (
-            <div className="flex-1 flex items-center justify-center bg-white dark:bg-neutral-900 text-neutral-400">
+            <div className="flex-1 flex items-center justify-center bg-paper text-olive-medium">
                 <div className="text-center">
                     <p>Select a file to edit</p>
                 </div>
@@ -98,18 +90,20 @@ export function Editor() {
         );
     }
 
+    const content = currentFile.content || '';
+
     return (
-        <div className="flex-1 flex flex-col h-full bg-white dark:bg-neutral-900">
+        <div className="flex-1 flex flex-col h-full bg-paper overflow-hidden">
             {/* Tabs */}
-            <div className="flex overflow-x-auto border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900">
+            <div className="flex overflow-x-auto border-b border-olive-medium/20 bg-paper">
                 {openFiles.map((file) => (
                     <div
                         key={file.path}
                         className={clsx(
-                            "flex items-center gap-2 px-4 py-2 text-sm border-r border-neutral-200 dark:border-neutral-700 cursor-pointer min-w-[150px] max-w-[200px]",
+                            "flex items-center gap-2 px-4 py-2 text-sm border-r border-olive-medium/20 cursor-pointer min-w-[150px] max-w-[200px]",
                             activeFile === file.path
-                                ? "bg-white dark:bg-neutral-900 text-blue-600 dark:text-blue-400 font-medium border-t-2 border-t-blue-600"
-                                : "bg-neutral-50 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                ? "bg-paper text-olive-dark font-medium border-t-2 border-t-olive-dark"
+                                : "bg-olive-medium/5 text-olive-medium hover:bg-olive-medium/10"
                         )}
                         onClick={() => setActiveFile(file.path)}
                     >
@@ -119,7 +113,7 @@ export function Editor() {
                                 e.stopPropagation();
                                 closeFile(file.path);
                             }}
-                            className="p-0.5 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded"
+                            className="p-0.5 hover:bg-olive-medium/20 rounded text-olive-medium hover:text-olive-dark"
                         >
                             <X className="w-3 h-3" />
                         </button>
@@ -128,171 +122,143 @@ export function Editor() {
             </div>
 
             {/* Toolbar */}
-            <div className="p-2 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between bg-white dark:bg-neutral-900">
-                <div className="flex items-center gap-3">
-                    <div className="text-sm text-neutral-500 truncate px-2 flex items-center gap-2">
-                        <span className="px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-800 rounded text-xs font-mono text-neutral-600 dark:text-neutral-400">
+            <div className="h-12 border-b border-olive-medium/20 flex items-center justify-between px-4 bg-paper">
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-sm text-olive-dark">
+                        <FileText className="w-4 h-4 text-olive-medium" />
+                        <span className="font-medium">{currentFile.path.split('/').pop()}</span>
+                    </div>
+                    {currentBranch && (
+                        <span className="px-1.5 py-0.5 bg-olive-medium/10 rounded text-xs font-mono text-olive-medium">
                             {currentBranch}
                         </span>
-                        <span>{currentFile.path}</span>
-                    </div>
-                    {isPaperMainDoc && (
-                        <div className="flex items-center bg-neutral-100 dark:bg-neutral-800 rounded-md p-0.5">
-                            <button
-                                onClick={() => setEditorMode('live')}
-                                className={clsx(
-                                    "px-2 py-1 text-xs font-medium rounded-sm flex items-center gap-1 transition-colors",
-                                    editorMode === 'live'
-                                        ? "bg-white dark:bg-neutral-700 text-blue-600 dark:text-blue-400 shadow-sm"
-                                        : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
-                                )}
-                            >
-                                <Eye className="w-3 h-3" />
-                                Live
-                            </button>
-                            <button
-                                onClick={() => setEditorMode('preview')}
-                                className={clsx(
-                                    "px-2 py-1 text-xs font-medium rounded-sm flex items-center gap-1 transition-colors",
-                                    editorMode === 'preview'
-                                        ? "bg-white dark:bg-neutral-700 text-blue-600 dark:text-blue-400 shadow-sm"
-                                        : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
-                                )}
-                            >
-                                <FileText className="w-3 h-3" />
-                                Preview
-                            </button>
-                            <button
-                                onClick={() => setEditorMode('code')}
-                                className={clsx(
-                                    "px-2 py-1 text-xs font-medium rounded-sm flex items-center gap-1 transition-colors",
-                                    editorMode === 'code'
-                                        ? "bg-white dark:bg-neutral-700 text-blue-600 dark:text-blue-400 shadow-sm"
-                                        : "text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
-                                )}
-                            >
-                                <Code className="w-3 h-3" />
-                                Code
-                            </button>
-                        </div>
                     )}
                 </div>
+
                 <div className="flex items-center gap-2">
+                    {/* View Toggle */}
+                    <div className="flex bg-olive-medium/10 rounded-md p-0.5 mr-2">
+                        <button
+                            onClick={() => setEditorMode('live')}
+                            className={clsx(
+                                "px-2 py-1 text-xs font-medium rounded-sm transition-colors",
+                                editorMode === 'live' ? "bg-paper text-olive-dark shadow-sm" : "text-olive-medium hover:text-olive-dark"
+                            )}
+                        >
+                            Live
+                        </button>
+                        <button
+                            onClick={() => setEditorMode('preview')}
+                            className={clsx(
+                                "px-2 py-1 text-xs font-medium rounded-sm transition-colors",
+                                editorMode === 'preview' ? "bg-paper text-olive-dark shadow-sm" : "text-olive-medium hover:text-olive-dark"
+                            )}
+                        >
+                            Preview
+                        </button>
+                        <button
+                            onClick={() => setEditorMode('code')}
+                            className={clsx(
+                                "px-2 py-1 text-xs font-medium rounded-sm transition-colors",
+                                editorMode === 'code' ? "bg-paper text-olive-dark shadow-sm" : "text-olive-medium hover:text-olive-dark"
+                            )}
+                        >
+                            Code
+                        </button>
+                    </div>
+
                     {showCommitInput ? (
-                        <div className="flex items-center gap-2 animate-in slide-in-from-right-5 fade-in duration-200">
+                        <div className="flex items-center gap-2 animate-in slide-in-from-right-2">
                             <input
                                 type="text"
                                 value={commitMessage}
                                 onChange={(e) => setCommitMessage(e.target.value)}
                                 placeholder="Commit message..."
-                                className="px-2 py-1 text-sm border border-neutral-300 dark:border-neutral-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-neutral-50 dark:bg-neutral-800"
+                                className="text-sm bg-olive-medium/5 border border-olive-medium/20 rounded px-2 py-1 w-48 focus:outline-none focus:border-olive-medium"
                                 autoFocus
                                 onKeyDown={(e) => e.key === 'Enter' && handleSave()}
                             />
                             <button
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
+                                className="p-1.5 bg-olive-dark text-olive-light rounded hover:opacity-90 disabled:opacity-50"
                             >
-                                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Commit'}
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                             </button>
                             <button
                                 onClick={() => setShowCommitInput(false)}
-                                className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
+                                className="p-1.5 text-olive-medium hover:text-olive-dark"
                             >
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
                     ) : (
-                        <button
-                            onClick={() => {
-                                setCommitMessage(`Update ${currentFile.path.split('/').pop()} via OpenResearchApp`);
-                                setShowCommitInput(true);
-                            }}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-sm rounded hover:opacity-90 transition-opacity"
-                        >
-                            <Save className="w-3 h-3" />
-                            <span>Save to GitHub</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => {
+                                    if (currentRepo && currentFile) {
+                                        const branch = currentBranch || 'main';
+                                        const url = `https://github.com/${currentFile.owner}/${currentFile.repo}/blob/${branch}/${currentFile.path}`;
+                                        window.open(url, '_blank');
+                                    }
+                                }}
+                                className="p-1.5 hover:bg-olive-medium/10 rounded text-olive-medium hover:text-olive-dark transition-colors"
+                                title="Open on GitHub"
+                            >
+                                <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setCommitMessage(`Update ${currentFile.path.split('/').pop()} via OpenResearchApp`);
+                                    setShowCommitInput(true);
+                                }}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-olive-dark text-olive-light text-sm rounded hover:opacity-90 transition-opacity"
+                            >
+                                <Save className="w-3 h-3" />
+                                <span>Save</span>
+                            </button>
+                        </div>
                     )}
                 </div>
             </div>
 
             {/* Editor Area */}
-            <div className="flex-1 overflow-hidden relative">
-                {isPaperMainDoc && editorMode === 'preview' ? (
-                    <div className="h-full overflow-y-auto bg-neutral-100 dark:bg-neutral-950">
-                        <div className="max-w-[816px] min-h-[1056px] mx-auto my-10 bg-white dark:bg-neutral-900 shadow-sm rounded-sm">
-                            <LatexRenderer content={currentFile.content} />
+            <div className="flex-1 overflow-hidden relative bg-paper">
+                {editorMode === 'live' ? (
+                    <div className="flex h-full">
+                        <div className="w-1/2 h-full border-r border-olive-medium/20 overflow-y-auto">
+                            <CodeMirror
+                                value={content}
+                                height="100%"
+                                extensions={[markdown()]}
+                                onChange={handleChange}
+                                onCreateEditor={setEditorView}
+                                theme="light"
+                                className="h-full text-base"
+                            />
+                        </div>
+                        <div className="w-1/2 h-full overflow-y-auto bg-paper p-8">
+                            <LatexRenderer content={content} />
                         </div>
                     </div>
+                ) : editorMode === 'preview' ? (
+                    <div className="h-full overflow-y-auto bg-paper p-8 max-w-4xl mx-auto shadow-sm my-4 border border-olive-medium/10">
+                        <LatexRenderer content={content} />
+                    </div>
                 ) : (
-                    <CodeMirror
-                        value={currentFile.content}
-                        height="100%"
-                        onCreateEditor={(view) => {
-                            // Store view in a ref or just use a local variable if we only need it for one-off
-                            // But we need it in useEffect. 
-                            // Let's attach it to a ref defined outside.
-                            // Actually, we can't easily pass a ref to useEffect from here without state.
-                            // Let's use a state to hold the view.
-                            setEditorView(view);
-                        }}
-                        extensions={[
-                            markdown({ base: markdownLanguage }),
-                            EditorView.lineWrapping,
-                            EditorView.theme(
-                                isPaperMainDoc && editorMode === 'live'
-                                    ? {
-                                        "&": {
-                                            fontSize: "16px",
-                                            fontFamily: "var(--font-inter), sans-serif",
-                                            backgroundColor: "#f5f5f5",
-                                            height: "100%"
-                                        },
-                                        ".cm-content": {
-                                            maxWidth: "816px",
-                                            minHeight: "1056px",
-                                            margin: "40px auto",
-                                            padding: "60px 80px",
-                                            backgroundColor: "white",
-                                            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-                                            borderRadius: "2px"
-                                        },
-                                        ".cm-line": { lineHeight: "1.8", color: "#333" },
-                                        ".cm-activeLine": { backgroundColor: "transparent" },
-                                        ".cm-gutters": { display: "none" }
-                                    }
-                                    : {
-                                        "&": { fontSize: "13px", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" },
-                                        ".cm-content": { maxWidth: "100%", margin: "0", padding: "16px 12px" },
-                                    }
-                            ),
-                            EditorView.baseTheme({
-                                ".cm-header-1": { fontSize: "2em", fontWeight: "bold", marginTop: "1em", marginBottom: "0.5em" },
-                                ".cm-header-2": { fontSize: "1.5em", fontWeight: "bold", marginTop: "1em", marginBottom: "0.5em" },
-                                ".cm-header-3": { fontSize: "1.25em", fontWeight: "bold", marginTop: "1em", marginBottom: "0.5em" },
-                                ".cm-strong": { fontWeight: "bold" },
-                                ".cm-em": { fontStyle: "italic" },
-                                ".cm-citation": {
-                                    backgroundColor: "#e0f2fe",
-                                    color: "#0284c7",
-                                    padding: "2px 6px",
-                                    borderRadius: "4px",
-                                    fontSize: "0.9em",
-                                    fontWeight: "500"
-                                }
-                            })
-                        ]}
-                        onChange={handleChange}
-                        theme={isPaperMainDoc && editorMode === 'live' ? 'light' : 'light'}
-                        className="h-full text-base"
-                        basicSetup={{
-                            lineNumbers: !(isPaperMainDoc && editorMode === 'live'),
-                            foldGutter: !(isPaperMainDoc && editorMode === 'live'),
-                            highlightActiveLine: !(isPaperMainDoc && editorMode === 'live'),
-                        }}
-                    />
+                    <div className="h-full overflow-y-auto">
+                        <CodeMirror
+                            value={content}
+                            height="100%"
+                            extensions={[markdown()]}
+                            onChange={handleChange}
+                            onCreateEditor={setEditorView}
+                            theme="light"
+                            className="h-full text-base"
+                        />
+                    </div>
                 )}
             </div>
         </div>

@@ -1,21 +1,49 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* New Color Scheme */
+  --color-dark: #363920;
+  --color-medium: #70744f;
+  --color-light: #fffef3;
+
+  /* App Background (Void) */
+  --background: #f4f4f4;
+  --foreground: #363920;
+
+  /* Paper/Card Background */
+  --paper: #fffef3;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+
+  --color-olive-dark: var(--color-dark);
+  --color-olive-medium: var(--color-medium);
+  --color-olive-light: var(--color-light);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Dark Mode Mapping - Inverting logic slightly for dark mode while keeping the soul */
+    /* Maybe keep the olive tones but darken the background significantly */
+    --background: #1a1c10;
+    /* Very dark olive/black */
+    --foreground: #fffef3;
+    /* Light cream text */
+    --paper: #262917;
+    /* Darker olive for cards */
+
+    --color-dark: #fffef3;
+    /* Text becomes light */
+    --color-medium: #aeb38a;
+    /* Lighter olive for secondary */
+    --color-light: #262917;
+    /* Backgrounds become dark */
   }
 }
 
@@ -36,4 +64,24 @@ body {
 
 .swiss-type {
   letter-spacing: -0.02em;
+}
+
+/* Scrollbar Styling for that premium feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-medium);
+  opacity: 0.5;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-dark);
 }
